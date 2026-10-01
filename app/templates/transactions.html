@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="transactionsPage()" x-init="init()" class="space-y-4">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Transactions</h1>
+    <div class="flex items-center gap-2">
+      <a :href="exportUrl()" class="btn btn-secondary btn-sm">
+        <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="stat-card">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div>
+        <label class="form-label">Card / Account</label>
+        <select class="form-select" x-model="filters.account_id" @change="reload()">
+          <option value="">All accounts</option>
+          <template x-for="a in accounts" :key="a.id">
+            <option :value="a.id" x-text="a.nickname || (a.bank_name + ' ' + (a.last_four||''))"></option>
+          </template>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Person (Paid By)</label>
+        <select class="form-select" x-model="filters.person_id" @change="reload()">
+          <option value="">Everyone</option>
+          <template x-for="p in persons" :key="p.id">
+            <option :value="p.id" x-text="p.name"></option>
+          </template>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Bank</label>
+        <select class="form-select" x-model="filters.bank_name" @change="reload()">
+          <option value="">All banks</option>
+          <template x-for="b in banks" :key="b">
+            <option :value="b" x-text="b"></option>
+          </template>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">Category</label>
+        <select class="form-select" x-model="filters.category_id" @change="reload()">
+          <option value="">All categories</option>
+          <optgroup label="Expense">
+            <template x-for="c in categories.filter(c=>c.type==='expense')" :key="c.id">
+              <option :value="c.id" x-text="c.parent_id ? '— ' + c.name : c.name"></option>
+            </template>
+          </optgroup>
+          <optgroup label="Income">
+            <template x-for="c in categories.filter(c=>c.type==='income')" :key="c.id">
+              <option :value="c.id" x-text="c.name"></option>
+            </template>
+          </optgroup>
+          <optgroup label="Transfer">
+            <template x-for="c in categories.filter(c=>c.type==='transfer')" :key="c.id">
+              <option :value="c.id" x-text="c.name"></option>
+            </template>
+          </optgroup>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label">From</label>
+        <input type="date" class="form-input" x-model="filters.start_date" @change="reload()">
+      </div>
+
+      <div>
+        <label class="form-label">To</label>
+        <input type="date" class="form-input" x-model="filters.end_date" @change="reload()">
+      </div>
+
+      <div>
+        <label class="form-label">Merchant contains</label>
+        <input type="text" class="form-input" placeholder="e.g. Amazon"
+               x-model.debounce.500ms="filters.merchant" @input="reload()">
+      </div>
+
+      <div class="flex items-end gap-2">
+        <button class="btn btn-primary flex-1" @click="reload()">
+          <i data-lucide="filter" class="w-4 h-4"></i> Apply
+        </button>
+        <button class="btn btn-ghost" @click="clearFilters()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Quick chips -->
+    <div class="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <button class="filter-chip" :class="filters.txn_type === 'debit' && 'active'" @click="toggleType('debit')">Expense</button>
+      <button class="filter-chip" :class="filters.txn_type === 'credit' && 'active'" @click="toggleType('credit')">Income</button>
+      <button class="filter-chip" :class="filters.needs_review === true && 'active'" @click="toggleReview()">Needs review</button>
+      <button class="filter-chip" :class="filters.include_transfers && 'active'" @click="filters.include_transfers = !filters.include_transfers; reload()">Include transfers</button>
+      <span class="ml-auto text-sm text-gray-500 dark:text-gray-400">
+        <span x-text="total"></span> results
+      </span>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="stat-card p-0 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full transaction-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Account</th>
+            <th>Category</th>
+            <th>Expense For</th>
+            <th class="text-right">Amount</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="t in transactions" :key="t.id">
+            <tr>
+              <td data-label="Date" class="whitespace-nowrap text-gray-500 dark:text-gray-400" x-text="formatDate(t.txn_timestamp)"></td>
+
+              <td data-label="Description">
+                <div class="font-medium text-gray-900 dark:text-white" x-text="t.merchant || t.raw_text.slice(0,60)"></div>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="badge" :class="t.txn_type === 'debit' ? 'badge-expense' : 'badge-income'"
+                        x-text="t.txn_type"></span>
+                  <span x-show="t.txn_mode" class="text-xs text-gray-400" x-text="t.txn_mode"></span>
+                  <span x-show="t.cashback_amount > 0" class="badge badge-pending"
+                        x-text="'CB ' + formatCurrency(t.cashback_amount)"></span>
+                </div>
+              </td>
+
+              <td data-label="Account">
+                <div class="text-sm" x-text="t.account_nickname || '—'"></div>
+                <div class="text-xs text-gray-400" x-text="t.person_name"></div>
+              </td>
+
+              <td data-label="Category">
+                <span x-show="t.category_name" class="badge badge-transfer" x-text="t.category_name"></span>
+                <button x-show="!t.category_name" class="badge badge-review cursor-pointer"
+                        @click="openCategorize(t)">Assign</button>
+                <span x-show="t.needs_review && t.category_name" class="badge badge-review ml-1">review</span>
+              </td>
+
+              <td data-label="Expense For">
+                <div class="text-xs space-y-0.5">
+                  <template x-for="a in (t.allocations||[]).filter(a=>a.allocation_type==='expense_for')" :key="a.id">
+                    <div x-text="(a.person_name || 'Home') + ' · ' + formatCurrency(a.amount)"></div>
+                  </template>
+                  <template x-for="a in (t.allocations||[]).filter(a=>a.allocation_type==='income_from')" :key="a.id">
+                    <div class="text-green-600 dark:text-green-400" x-text="(a.person_name || 'Home') + ' · ' + formatCurrency(a.amount)"></div>
+                  </template>
+                </div>
+              </td>
+
+              <td data-label="Amount" class="text-right font-semibold whitespace-nowrap"
+                  :class="t.txn_type === 'debit' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'"
+                  x-text="formatCurrency(t.parsed_amount)"></td>
+
+              <td data-label="Actions" class="text-right whitespace-nowrap">
+                <button class="btn btn-ghost btn-sm" @click="openDetail(t)" title="Detail">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+                <button class="btn btn-ghost btn-sm" @click="openSplit(t)" title="Split">
+                  <i data-lucide="split" class="w-4 h-4"></i>
+                </button>
+              </td>
+            </tr>
+          </template>
+
+          <tr x-show="transactions.length === 0">
+            <td colspan="7" class="p-0">
+              <div class="empty-state">
+                <i data-lucide="inbox"></i>
+                <p>No transactions match your filters.</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div x-show="totalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+      <span class="text-sm text-gray-500 dark:text-gray-400">
+        Page <span x-text="page"></span> of <span x-text="totalPages"></span>
+      </span>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary btn-sm" :disabled="page <= 1" @click="page--; reload()">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+        </button>
+        <button class="btn btn-secondary btn-sm" :disabled="page >= totalPages" @click="page++; reload()">
+          Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CATEGORIZE MODAL ============ -->
+  <template x-if="categorizeTarget">
+    <div class="modal-overlay" @click.self="closeCategorize()">
+      <div class="modal-content p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Assign category</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="categorizeTarget.raw_text"></p>
+          </div>
+          <button class="btn btn-ghost btn-sm" @click="closeCategorize()">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
+          <div><span class="text-gray-500">Amount</span>
+            <span class="font-semibold ml-2" x-text="formatCurrency(categorizeTarget.parsed_amount)"></span></div>
+          <div><span class="text-gray-500">Paid by</span>
+            <span class="font-medium ml-2" x-text="categorizeTarget.person_name"></span></div>
+        </div>
+
+        <div class="space-y-2 mb-4 max-h-72 overflow-y-auto">
+          <template x-for="root in categories" :key="root.id">
+            <div>
+              <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-3 mb-1" x-text="root.name"></p>
+              <template x-for="c in ([root].concat(root.children||[]))" :key="c.id">
+                <label class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                       :class="c.id === categorizeTarget.category_id && 'bg-primary-50 dark:bg-primary-900/20'">
+                  <input type="radio" :value="c.id" x-model="selectedCategory" class="text-primary-600">
+                  <span class="text-sm" x-text="(root.children ? '   ↳ ' : '') + c.name"></span>
+                </label>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button class="btn btn-primary" @click="saveCategorize()">
+            <i data-lucide="check" class="w-4 h-4"></i> Save
+          </button>
+          <button class="btn btn-secondary" @click="markSpam()">
+            <i data-lucide="ban" class="w-4 h-4"></i> Mark as spam / ignore
+          </button>
+        </div>
+
+        <p class="text-xs text-gray-400 mt-3">
+          Tip: categorizing this merchant will auto-assign future transactions from the same merchant.
+        </p>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============ SPLIT MODAL ============ -->
+  <template x-if="splitTarget">
+    <div class="modal-overlay" @click.self="splitTarget = null">
+      <div class="modal-content p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Split expense</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="splitTarget.merchant || splitTarget.raw_text.slice(0,60)"></p>
+          </div>
+          <button class="btn btn-ghost btn-sm" @click="splitTarget = null">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between mb-3 text-sm">
+          <span class="text-gray-500">Total</span>
+          <span class="font-semibold" x-text="formatCurrency(splitTarget.parsed_amount)"></span>
+        </div>
+        <div class="flex items-center justify-between mb-4 text-sm">
+          <span class="text-gray-500">Remaining</span>
+          <span class="font-semibold" :class="remaining() < 0 ? 'text-red-600' : 'text-green-600'" x-text="formatCurrency(remaining())"></span>
+        </div>
+
+        <div class="space-y-2 mb-4">
+          <template x-for="(row, idx) in splitRows" :key="idx">
+            <div class="allocation-row">
+              <select class="form-select flex-1" x-model="row.person_id">
+                <option value="">Home (Both)</option>
+                <template x-for="p in persons" :key="p.id">
+                  <option :value="p.id" x-text="p.name"></option>
+                </template>
+              </select>
+              <input type="number" step="0.01" class="form-input w-32" x-model.number="row.amount" placeholder="0.00">
+              <button class="btn btn-ghost btn-sm" @click="splitRows.splice(idx,1)">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button class="btn btn-secondary btn-sm" @click="addSplitRow()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add row
+          </button>
+          <button class="btn btn-secondary btn-sm" @click="splitEvenly(2)">Split in 2</button>
+          <button class="btn btn-secondary btn-sm" @click="splitEvenly(3)">Split in 3</button>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button class="btn btn-primary" :disabled="remaining() !== 0" @click="saveSplit()">
+            <i data-lucide="check" class="w-4 h-4"></i> Save split
+          </button>
+          <button class="btn btn-ghost" @click="splitTarget = null">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============ DETAIL MODAL ============ -->
+  <template x-if="detailTarget">
+    <div class="modal-overlay" @click.self="detailTarget = null">
+      <div class="modal-content p-6">
+        <div class="flex items-start justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Transaction detail</h3>
+          <button class="btn btn-ghost btn-sm" @click="detailTarget = null">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
+          <div><span class="text-gray-500">Amount</span>
+            <span class="font-semibold ml-2" x-text="formatCurrency(detailTarget.parsed_amount)"></span></div>
+          <div><span class="text-gray-500">Date</span>
+            <span class="ml-2" x-text="formatDate(detailTarget.txn_timestamp)"></span></div>
+          <div><span class="text-gray-500">Paid by</span>
+            <span class="ml-2" x-text="detailTarget.person_name"></span></div>
+          <div><span class="text-gray-500">Account</span>
+            <span class="ml-2" x-text="detailTarget.account_nickname || '—'"></span></div>
+          <div><span class="text-gray-500">Mode</span>
+            <span class="ml-2" x-text="detailTarget.txn_mode || '—'"></span></div>
+          <div><span class="text-gray-500">Category</span>
+            <span class="ml-2" x-text="detailTarget.category_name || 'Unassigned'"></span></div>
+          <div class="col-span-2"><span class="text-gray-500">UPI ref</span>
+            <span class="ml-2 font-mono text-xs" x-text="detailTarget.upi_ref || '—'"></span></div>
+        </div>
+
+        <!-- Cashback editor -->
+        <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800 mb-4">
+          <p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Cashback</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <input type="number" step="0.01" class="form-input" placeholder="Amount"
+                   :value="detailTarget.cashback_amount" @change="saveCashback('cashback_amount', +$event.target.value)">
+            <select class="form-select" :value="detailTarget.cashback_type || ''"
+                    @change="saveCashback('cashback_type', $event.target.value || null)">
+              <option value="">Type</option>
+              <option value="cash">Cash</option>
+              <option value="points">Points</option>
+              <option value="wallet">Wallet</option>
+            </select>
+            <input type="text" class="form-input" placeholder="Wallet"
+                   :value="detailTarget.cashback_wallet || ''"
+                   @change="saveCashback('cashback_wallet', $event.target.value || null)">
+            <select class="form-select" :value="detailTarget.cashback_status || 'pending'"
+                    @change="saveCashback('cashback_status', $event.target.value)">
+              <option value="pending">Pending</option>
+              <option value="received">Received</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Raw message</p>
+        <pre class="text-xs bg-gray-100 dark:bg-gray-900 rounded-lg p-3 whitespace-pre-wrap break-words" x-text="detailTarget.raw_text"></pre>
+
+        <div class="flex gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button class="btn btn-secondary" @click="openCategorize(detailTarget)">Change category</button>
+          <button class="btn btn-secondary" @click="openSplit(detailTarget)">Split</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function transactionsPage() {
+  return {
+    transactions: [], accounts: [], persons: [], categories: [],
+    banks: [], total: 0, page: 1, pageSize: 50, totalPages: 1,
+    filters: { account_id:'', person_id:'', bank_name:'', category_id:'',
+               txn_type:'', needs_review:false, include_transfers:false,
+               start_date:'', end_date:'', merchant:'' },
+    categorizeTarget: null, selectedCategory: null,
+    splitTarget: null, splitRows: [],
+    detailTarget: null,
+
+    async init() {
+      this.loadLookups();
+      await this.reload();
+      window.addEventListener('person-changed', () => this.reload());
+    },
+
+    async loadLookups() {
+      try {
+        this.persons   = await api('/api/persons');
+        this.accounts  = await api('/api/accounts');
+        this.categories= await api('/api/categories/tree');
+        this.banks = [...new Set(this.accounts.map(a => a.bank_name))].sort();
+      } catch (e) {
+        console.error(e);
+      }
+    },
+
+    qs() {
+      const f = this.filters;
+      const p = new URLSearchParams();
+      if (f.account_id)    p.set('account_id', f.account_id);
+      if (f.person_id)     p.set('person_id', f.person_id);
+      if (f.category_id)   p.set('category_id', f.category_id);
+      if (f.txn_type)      p.set('txn_type', f.txn_type);
+      if (f.start_date)    p.set('start_date', f.start_date + 'T00:00:00');
+      if (f.end_date)      p.set('end_date', f.end_date + 'T23:59:59');
+      if (f.merchant)      p.set('merchant', f.merchant);
+      if (f.needs_review)  p.set('needs_review', 'true');
+      p.set('page', this.page);
+      p.set('page_size', this.pageSize);
+      return p;
+    },
+
+    async reload() {
+      try {
+        const data = await api('/api/transactions?' + this.qs().toString());
+        let items = data.items;
+
+        // Bank filter is client-side (derived from account)
+        if (this.filters.bank_name) {
+          items = items.filter(t => {
+            const a = this.accounts.find(x => x.id === t.account_id);
+            return a && a.bank_name === this.filters.bank_name;
+          });
+        }
+        // Hide transfers unless asked
+        if (!this.filters.include_transfers) {
+          items = items.filter(t => t.category_type !== 'transfer');
+        }
+
+        this.transactions = items;
+        this.total = data.total;
+        this.totalPages = data.total_pages;
+      } catch (e) {
+        console.error(e);
+        showToast('Could not load transactions', 'error');
+      }
+    },
+
+    clearFilters() {
+      this.filters = { account_id:'', person_id:'', bank_name:'', category_id:'',
+                       txn_type:'', needs_review:false, include_transfers:false,
+                       start_date:'', end_date:'', merchant:'' };
+      this.page = 1;
+      this.reload();
+    },
+
+    toggleType(t) { this.filters.txn_type = this.filters.txn_type === t ? '' : t; this.page = 1; this.reload(); },
+    toggleReview() { this.filters.needs_review = !this.filters.needs_review; this.page = 1; this.reload(); },
+
+    exportUrl() {
+      const p = this.qs();
+      p.delete('page'); p.delete('page_size');
+      return '/api/transactions/export/csv?' + p.toString();
+    },
+
+    // ---- categorize ----
+    openCategorize(t) {
+      this.categorizeTarget = t;
+      this.selectedCategory = t.category_id || null;
+      if (this.detailTarget) this.detailTarget = null;
+    },
+    closeCategorize() {
+      this.categorizeTarget = null;
+      this.selectedCategory = null;
+      this.reload();
+    },
+    async saveCategorize() {
+      if (!this.selectedCategory) return showToast('Pick a category first', 'warning');
+      await api('/api/transactions/' + this.categorizeTarget.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ category_id: this.selectedCategory, needs_review: false })
+      });
+      showToast('Category saved', 'success');
+      this.closeCategorize();
+    },
+    async markSpam() {
+      await api('/api/transactions/' + this.categorizeTarget.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_spam: true, needs_review: false })
+      });
+      showToast('Marked as spam / ignored', 'success');
+      this.closeCategorize();
+    },
+
+    // ---- split ----
+    openSplit(t) {
+      this.splitTarget = t;
+      this.detailTarget = null;
+      const existing = (t.allocations || []).filter(a => a.allocation_type === 'expense_for');
+      this.splitRows = existing.length > 1
+        ? existing.map(a => ({ person_id: a.person_id || '', amount: Number(a.amount) }))
+        : [{ person_id: t.person_id, amount: Number(t.parsed_amount) }];
+    },
+    addSplitRow() { this.splitRows.push({ person_id: '', amount: 0 }); },
+    splitEvenly(n) {
+      const per = (Number(this.splitTarget.parsed_amount) / n).toFixed(2);
+      const rows = Array.from({ length: n }, () => ({ person_id: '', amount: Number(per) }));
+      // Fix rounding on last row
+      const sum = rows.slice(0, n - 1).reduce((a, r) => a + r.amount, 0);
+      rows[n - 1].amount = Number((Number(this.splitTarget.parsed_amount) - sum).toFixed(2));
+      this.splitRows = rows;
+    },
+    remaining() {
+      const total = Number((this.splitTarget && this.splitTarget.parsed_amount) || 0);
+      const sum = this.splitRows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+      return Number((total - sum).toFixed(2));
+    },
+    async saveSplit() {
+      const allocations = this.splitRows
+        .filter(r => Number(r.amount) > 0)
+        .map(r => ({
+          person_id: r.person_id === '' ? null : Number(r.person_id),
+          amount: Number(r.amount),
+          allocation_type: 'expense_for',
+          notes: null
+        }));
+      if (!allocations.length) return showToast('Add at least one split row', 'warning');
+      await api('/api/transactions/' + this.splitTarget.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ allocations })
+      });
+      showToast('Split saved', 'success');
+      this.splitTarget = null;
+      this.reload();
+    },
+
+    // ---- detail ----
+    openDetail(t) { this.detailTarget = t; },
+    async saveCashback(field, value) {
+      await api('/api/transactions/' + this.detailTarget.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: value })
+      });
+      this.detailTarget[field] = value;
+      showToast('Cashback updated', 'success');
+    }
+  };
+}
+</script>
+{% endblock %}

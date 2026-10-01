@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: samruddhi-fin
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    # Migrations run as part of start, not preDeploy: Render's preDeployCommand
+    # is a paid-plan feature, and on the free plan it would be skipped - leaving
+    # an empty database that the app correctly refuses to use. The `&&` means
+    # the app only starts once the schema is current.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # ------------------------------------------------------------------
+      # REQUIRED
+      # Neon > your project > Connection Details > "Pooled connection".
+      # Must contain "-pooler". A plain postgres:// URL is upgraded to
+      # postgresql+asyncpg:// at startup, so paste it exactly as given.
+      - key: DATABASE_URL
+        sync: false
+
+      # ------------------------------------------------------------------
+      # SECRET_KEY - any long random string.
+      #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+      # Currently unused at runtime, but validated so you cannot ship the
+      # insecure default to production.
+      - key: SECRET_KEY
+        generateValue: true
+
+      # ------------------------------------------------------------------
+      # TELEGRAM - from @BotFather and the group chat.
+      # TELEGRAM_CHAT_ID is the group's numeric id (ask @userinfobot).
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+      # ------------------------------------------------------------------
+      # NOT set here on purpose - the app runs fine without them.
+      #
+      # TELEGRAM_WEBHOOK_SECRET - optional second guard on the webhook. The
+      #   webhook already rejects any chat id that does not match
+      #   TELEGRAM_CHAT_ID, so this is belt-and-braces. Add it in the Render
+      #   dashboard if you ever want it.
+      #
+      # WEBHOOK_URL - only read by scripts/setup_webhook.py, which you run on
+      #   your own machine. Put it in your LOCAL .env, not here.
+
+      # Pin the runtime so a Python upgrade on Render's side cannot break you.
+      - key: PYTHON_VERSION
+        value: "3.12.9"
+
+      - key: APP_ENV
+        value: production

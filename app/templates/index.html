@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="dashboard()" x-init="load()" class="space-y-5">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex items-center gap-1 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+        <template x-for="p in periods" :key="p">
+          <button class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                  :class="period === p
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                  @click="period = p; load()"
+                  x-text="p"></button>
+        </template>
+      </div>
+      <select class="form-select w-auto" x-model="personFilter" @change="load()">
+        <option value="">Everyone</option>
+        <template x-for="p in persons" :key="p.id">
+          <option :value="p.id" x-text="p.name"></option>
+        </template>
+      </select>
+    </div>
+  </div>
+
+  <!-- Review banner -->
+  <div x-show="reviewCount > 0" x-cloak
+       class="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 dark:text-amber-400"></i>
+    <span class="text-sm text-amber-800 dark:text-amber-200">
+      <span class="font-semibold" x-text="reviewCount"></span>
+      transaction(s) need a category
+    </span>
+    <a href="/uncategorized" class="btn btn-sm btn-primary ml-auto">Review now</a>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="stat-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Expense</p>
+          <p class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="money(s.total_expense)"></p>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="s.transaction_count + ' txns · avg ' + money(avg.avg_per_expense) + ' each'"></p>
+        </div>
+        <div class="stat-card-icon bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+          <i data-lucide="trending-down" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Income</p>
+          <p class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="money(s.total_income)"></p>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="'avg ' + money(avg.avg_income_per_day) + ' / day'"></p>
+        </div>
+        <div class="stat-card-icon bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+          <i data-lucide="trending-up" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Net</p>
+          <p class="text-2xl font-bold"
+             :class="Number(s.net) >= 0 ? 'text-primary-600 dark:text-primary-400' : 'text-red-600 dark:text-red-400'"
+             x-text="money(s.net)"></p>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="'savings rate ' + savingsRate()"></p>
+        </div>
+        <div class="stat-card-icon bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+          <i data-lucide="piggy-bank" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Averages</p>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="money(avg.avg_per_day)"></p>
+          <p class="text-xs text-gray-400 mt-0.5" x-text="'per day · ' + money(avg.avg_per_month) + ' / mo'"></p>
+        </div>
+        <div class="stat-card-icon bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+          <i data-lucide="calculator" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="chart-container">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Expense by category</h3>
+      <div class="h-64"><canvas id="catChart"></canvas></div>
+    </div>
+    <div class="chart-container">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Payment mode</h3>
+      <div class="h-64"><canvas id="modeChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div class="chart-container lg:col-span-2">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Daily spend</h3>
+      <p class="text-xs text-gray-400 mb-3">Last 30 days, by transaction date</p>
+      <div class="h-64"><canvas id="dailyChart"></canvas></div>
+    </div>
+    <div class="chart-container">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Who spent / earned</h3>
+      <div class="h-64"><canvas id="personChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Monthly trend</h3>
+    <p class="text-xs text-gray-400 mb-3">Expense vs income, last 12 months</p>
+    <div class="h-64"><canvas id="monthChart"></canvas></div>
+  </div>
+
+  <!-- Tables -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div class="chart-container">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Category breakdown</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead><tr><th>Category</th><th class="text-right">Amount</th><th class="text-right">%</th></tr></thead>
+          <tbody>
+            <template x-for="c in s.by_category" :key="c.category_id">
+              <tr>
+                <td>
+                  <span class="text-xs text-gray-400" x-text="c.parent_category ? c.parent_category + ' › ' : ''"></span>
+                  <span x-text="c.category_name"></span>
+                </td>
+                <td class="text-right font-medium" x-text="money(c.total_amount)"></td>
+                <td class="text-right text-gray-500" x-text="c.percentage + '%'"></td>
+              </tr>
+            </template>
+            <tr x-show="s.by_category.length === 0">
+              <td colspan="3" class="text-center text-sm text-gray-400 py-6">No expense data for this period.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Cashback</h3>
+      <div class="grid grid-cols-3 gap-3 mb-4">
+        <div>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Earned</p>
+          <p class="text-lg font-bold text-primary-600" x-text="money(cb.total_expected)"></p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Received</p>
+          <p class="text-lg font-bold text-green-600" x-text="money(cb.received)"></p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Effective</p>
+          <p class="text-lg font-bold text-gray-900 dark:text-white" x-text="cb.effective_rate + '%'"></p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead><tr><th>Card</th><th>Merchant</th><th class="text-right">Cashback</th><th>Status</th></tr></thead>
+          <tbody>
+            <template x-for="r in (cbRows || []).slice(0, 6)" :key="r.date + r.merchant">
+              <tr>
+                <td class="text-xs" x-text="r.card"></td>
+                <td class="text-xs" x-text="r.merchant || '—'"></td>
+                <td class="text-right font-medium text-primary-600" x-text="money(r.cashback_amount)"></td>
+                <td><span class="badge" :class="'badge-' + (r.cashback_status||'pending')" x-text="r.cashback_status||'pending'"></span></td>
+              </tr>
+            </template>
+            <tr x-show="(cbRows || []).length === 0">
+              <td colspan="4" class="text-center text-sm text-gray-400 py-6">No cashback tracked yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recurring -->
+  <div class="chart-container" x-show="(recurring || []).length > 0" x-cloak>
+    <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">
+      Recurring / subscriptions
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full transaction-table">
+        <thead><tr><th>Merchant</th><th class="text-right">Amount</th><th>Frequency</th><th>Next expected</th><th>Confidence</th></tr></thead>
+        <tbody>
+          <template x-for="r in recurring" :key="r.id">
+            <tr :class="r.is_due_soon && 'bg-amber-50 dark:bg-amber-900/10'">
+              <td class="font-medium" x-text="r.merchant"></td>
+              <td class="text-right" x-text="money(r.amount)"></td>
+              <td><span class="badge badge-ignore" x-text="r.frequency"></span></td>
+              <td x-text="r.next_expected_date ? r.next_expected_date.slice(0,10) : '—'"></td>
+              <td><span class="badge badge-pending" x-text="r.confidence + '%'"></span></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function dashboard() {
+  return {
+    periods: ['day', 'week', 'month', 'year', 'all'],
+    period: 'month',
+    personFilter: '',
+    persons: [],
+    reviewCount: 0,
+
+    s: { total_expense: 0, total_income: 0, net: 0, transaction_count: 0,
+         by_category: [], by_mode: [], by_person: [],
+         daily_trend: [], weekly_trend: [], monthly_trend: [] },
+    avg: {},
+    cb: {}, cbRows: [],
+    recurring: [],
+    charts: {},
+
+    get personId() { return this.personFilter || null; },
+
+    async init() {
+      try {
+        this.persons = await api('/api/persons');
+        const queue = await api('/api/transactions/uncategorized');
+        this.reviewCount = queue.length;
+      } catch (e) { console.error(e); }
+    },
+
+    async load() {
+      try {
+        const q = `period=${this.period}${this.personId ? `&person_id=${this.personId}` : ''}`;
+        const [summary, averages, cashback, recurring] = await Promise.all([
+          api(`/api/dashboard/summary?${q}`),
+          api(`/api/dashboard/averages?${q}`),
+          api('/api/dashboard/cashback?months=6'),
+          api('/api/dashboard/recurring?days_ahead=30'),
+        ]);
+        this.s = summary;
+        this.avg = averages;
+        this.cb = cashback.totals;
+        this.cbRows = cashback.rows;
+        this.recurring = recurring.recurring;
+        this.$nextTick(() => this.renderCharts());
+      } catch (e) {
+        console.error(e);
+        showToast('Could not load dashboard', 'error');
+      }
+    },
+
+    savingsRate() {
+      const inc = Number(this.s.total_income || 0);
+      if (!inc) return '—';
+      return ((Number(this.s.net) / inc) * 100).toFixed(1) + '%';
+    },
+
+    renderCharts() {
+      this.doughnut('catChart', this.s.by_category.slice(0, 8), 'category_name', 'total_amount');
+      this.doughnut('modeChart', this.s.by_mode, 'mode', 'total_amount');
+      this.groupedBar('personChart', this.s.by_person, 'name',
+        ['expense_for', 'income_from'], ['Expense For', 'Income From'], ['#ef4444', '#22c55e']);
+      this.stackedLine('dailyChart', this.s.daily_trend, 'bucket',
+        ['expense', 'income'], ['Expense', 'Income'], ['#ef4444', '#22c55e']);
+      this.groupedBar('monthChart', this.s.monthly_trend, 'bucket',
+        ['expense', 'income'], ['Expense', 'Income'], ['#ef4444', '#22c55e']);
+    },
+
+    gridColor() {
+      return document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb';
+    },
+    tickColor() {
+      return document.documentElement.classList.contains('dark') ? '#9ca3af' : '#6b7280';
+    },
+
+    doughnut(id, data, labelKey, valueKey) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (this.charts[id]) { this.charts[id].destroy(); }
+      const palette = ['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e',
+                       '#10b981','#14b8a6','#06b6d4','#0ea5e9','#3b82f6','#6366f1',
+                       '#8b5cf6','#a855f7','#d946ef'];
+      this.charts[id] = new Chart(el, {
+        type: 'doughnut',
+        data: {
+          labels: data.map(d => d[labelKey]),
+          datasets: [{
+            data: data.map(d => Number(d[valueKey] || 0)),
+            backgroundColor: data.map((_, i) => palette[i % palette.length]),
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right',
+                      labels: { color: this.tickColor(), usePointStyle: true,
+                                boxWidth: 8, font: { size: 11 } } },
+            tooltip: { callbacks: { label: c => `${c.label}: ${this.money(c.raw)}` } },
+          },
+        },
+      });
+    },
+
+    groupedBar(id, data, labelKey, keys, names, colors) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (this.charts[id]) { this.charts[id].destroy(); }
+      this.charts[id] = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => d[labelKey] || '—'),
+          datasets: keys.map((k, i) => ({
+            label: names[i],
+            data: data.map(d => Number(d[k] || 0)),
+            backgroundColor: colors[i],
+            borderRadius: 4,
+          })),
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: this.tickColor() } },
+            tooltip: { callbacks: { label: c => `${c.dataset.label}: ${this.money(c.raw)}` } },
+          },
+          scales: {
+            x: { ticks: { color: this.tickColor() }, grid: { display: false } },
+            y: { beginAtZero: true,
+                 ticks: { color: this.tickColor(), callback: v => this.money(v) },
+                 grid: { color: this.gridColor() } },
+          },
+        },
+      });
+    },
+
+    stackedLine(id, data, labelKey, keys, names, colors) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (this.charts[id]) { this.charts[id].destroy(); }
+      this.charts[id] = new Chart(el, {
+        type: 'line',
+        data: {
+          labels: data.map(d => (d[labelKey] || '').slice(5)),
+          datasets: keys.map((k, i) => ({
+            label: names[i],
+            data: data.map(d => Number(d[k] || 0)),
+            borderColor: colors[i],
+            backgroundColor: colors[i] + '22',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 0,
+          })),
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: this.tickColor() } },
+            tooltip: { callbacks: { label: c => `${c.dataset.label}: ${this.money(c.raw)}` } },
+          },
+          scales: {
+            x: { ticks: { color: this.tickColor(), maxTicksLimit: 10 }, grid: { display: false } },
+            y: { beginAtZero: true,
+                 ticks: { color: this.tickColor(), callback: v => this.money(v) },
+                 grid: { color: this.gridColor() } },
+          },
+        },
+      });
+    },
+
+    money(v) { return formatCurrency(v); },
+  };
+}
+</script>
+{% endblock %}

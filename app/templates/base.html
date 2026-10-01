@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Samruddhi Fin{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50:'#f0fdf4',100:'#dcfce7',200:'#bbf7d0',300:'#86efac',
+                400:'#4ade80',500:'#22c55e',600:'#16a34a',700:'#15803d',
+                800:'#166534',900:'#14532d'
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-16 items-center">
+      <div class="flex items-center gap-2">
+        <i data-lucide="wallet" class="w-6 h-6 text-primary-600"></i>
+        <span class="text-lg font-bold text-gray-900 dark:text-white">Samruddhi&nbsp;Fin</span>
+      </div>
+
+      <div class="hidden md:flex items-center gap-1" id="desktop-nav">
+        <a href="/"        class="nav-link px-3 py-2 rounded-lg text-sm font-medium" data-nav="/">Dashboard</a>
+        <a href="/transactions" class="nav-link px-3 py-2 rounded-lg text-sm font-medium" data-nav="/transactions">Transactions</a>
+        <a href="/uncategorized" class="nav-link px-3 py-2 rounded-lg text-sm font-medium" data-nav="/uncategorized">Review</a>
+        <a href="/settings" class="nav-link px-3 py-2 rounded-lg text-sm font-medium" data-nav="/settings">Settings</a>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button @click="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle theme">
+          <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+          <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+        </button>
+
+        <!-- Who am I -->
+        <div x-data="{ open:false }" class="relative">
+          <button @click="open = !open" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+            <i data-lucide="user" class="w-4 h-4"></i>
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.user.name"></span>
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+          </button>
+          <div x-show="open" @click.outside="open=false" x-cloak x-transition
+               class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-40">
+            <template x-for="p in $store.user.persons" :key="p.id">
+              <button @click="$store.user.select(p); open=false"
+                      class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2">
+                <span class="text-xs font-mono text-gray-400" x-text="p.prefix"></span>
+                <span class="text-sm" x-text="p.name"></span>
+                <i x-show="p.id === $store.user.id" data-lucide="check" class="w-4 h-4 ml-auto text-primary-600"></i>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <button @click="mobileOpen = !mobileOpen" class="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+          <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+      </div>
+    </div>
+
+    <div x-data="{ mobileOpen:false }" x-show="mobileOpen" x-cloak class="md:hidden border-t border-gray-200 dark:border-gray-700 py-2">
+      <a href="/" class="nav-link block px-3 py-2 rounded-lg text-sm" data-nav="/">Dashboard</a>
+      <a href="/transactions" class="nav-link block px-3 py-2 rounded-lg text-sm" data-nav="/transactions">Transactions</a>
+      <a href="/uncategorized" class="nav-link block px-3 py-2 rounded-lg text-sm" data-nav="/uncategorized">Review</a>
+      <a href="/settings" class="nav-link block px-3 py-2 rounded-lg text-sm" data-nav="/settings">Settings</a>
+    </div>
+  </div>
+</nav>
+
+<main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  {% block content %}{% endblock %}
+</main>
+
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  html.classList.toggle('dark');
+  localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+}
+(function () {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+})();
+function showToast(message, type = 'info') {
+  const colors = { success:'bg-green-600', error:'bg-red-600', warning:'bg-yellow-600', info:'bg-blue-600' };
+  const el = document.createElement('div');
+  el.className = `${colors[type]||colors.info} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in text-sm`;
+  el.innerHTML = `<span class="flex-1"></span><button class="opacity-70 hover:opacity-100">&times;</button>`;
+  el.querySelector('span').textContent = message;
+  el.querySelector('button').onclick = () => el.remove();
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+function markActiveNav() {
+  const path = window.location.pathname;
+  document.querySelectorAll('[data-nav]').forEach(a => {
+    a.classList.toggle('active', a.dataset.nav === path);
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  markActiveNav();
+  if (window.lucide) lucide.createIcons();
+});
+</script>
+<script src="/static/js/app.js"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="settingsPage()" x-init="init()" class="space-y-6">
+
+  <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+
+  <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700">
+    <template x-for="t in tabs" :key="t.id">
+      <button class="px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+              :class="tab === t.id
+                ? 'border-primary-600 text-primary-700 dark:text-primary-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+              @click="tab = t.id"
+              x-text="t.label"></button>
+    </template>
+  </div>
+
+  <!-- ============ ACCOUNTS ============ -->
+  <div x-show="tab === 'accounts'" class="space-y-4">
+    <div class="flex justify-end">
+      <button class="btn btn-primary" @click="openAccount()">
+        <i data-lucide="plus" class="w-4 h-4"></i> Add account
+      </button>
+    </div>
+
+    <div class="stat-card p-0 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead>
+            <tr>
+              <th>Nickname</th><th>Holder</th><th>Bank</th><th>Type</th>
+              <th>Last 4</th><th>UPI ID</th><th>Default Cashback</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="a in accounts" :key="a.id">
+              <tr>
+                <td class="font-medium" x-text="a.nickname || '—'"></td>
+                <td x-text="personName(a.person_id)"></td>
+                <td x-text="a.bank_name"></td>
+                <td><span class="badge badge-ignore" x-text="a.account_type"></span></td>
+                <td class="font-mono text-xs" x-text="a.last_four || '—'"></td>
+                <td class="font-mono text-xs" x-text="a.upi_id || '—'"></td>
+                <td>
+                  <span x-show="Number(a.default_cashback_pct) > 0">
+                    <span x-text="Number(a.default_cashback_pct) + '%'"></span>
+                    <span x-show="a.default_cashback_wallet"
+                          class="text-xs text-gray-400"
+                          x-text="'→ ' + a.default_cashback_wallet"></span>
+                  </span>
+                  <span x-show="Number(a.default_cashback_pct) <= 0" class="text-gray-400">—</span>
+                </td>
+                <td class="text-right">
+                  <button class="btn btn-ghost btn-sm" @click="openAccount(a)">
+                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                  </button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CATEGORIES ============ -->
+  <div x-show="tab === 'categories'" class="space-y-4">
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-secondary" @click="seedCategories()">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Reload
+      </button>
+      <button class="btn btn-secondary" @click="openCategory()">
+        <i data-lucide="plus" class="w-4 h-4"></i> Add subcategory
+      </button>
+    </div>
+
+    <template x-for="root in categories" :key="root.id">
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-gray-900 dark:text-white">
+            <span x-text="root.icon"></span> <span x-text="root.name"></span>
+          </h3>
+          <span class="badge badge-ignore" x-text="root.type"></span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <template x-for="c in (root.children || [])" :key="c.id">
+            <span class="filter-chip" :class="c.is_system ? '' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'"
+                  :title="c.is_system ? 'System category' : 'Custom category'">
+              <span x-text="c.name"></span>
+              <button x-show="!c.is_system" @click="deleteCategory(c)" class="ml-1 hover:text-red-500">
+                <i data-lucide="x" class="w-3 h-3"></i>
+              </button>
+            </span>
+          </template>
+          <span x-show="(root.children||[]).length === 0" class="text-sm text-gray-400">No subcategories yet</span>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ============ MAPPINGS ============ -->
+  <div x-show="tab === 'mappings'" class="space-y-4">
+    <div class="stat-card">
+      <h3 class="font-semibold text-gray-900 dark:text-white mb-1">Merchant learning rules</h3>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Rules learned from your manual categorisation. Matched on exact merchant name first, then partial.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div>
+          <label class="form-label">Merchant pattern</label>
+          <input type="text" class="form-input" x-model="newMapping.pattern" placeholder="e.g. SWIGGY">
+        </div>
+        <div>
+          <label class="form-label">Category</label>
+          <select class="form-select" x-model="newMapping.category_id">
+            <option value="">Choose…</option>
+            <template x-for="root in categories" :key="root.id">
+              <optgroup :label="root.name">
+                <template x-for="c in ([root].concat(root.children||[]))" :key="c.id">
+                  <option :value="c.id" x-text="c.name"></option>
+                </template>
+              </optgroup>
+            </template>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button class="btn btn-primary w-full" @click="addMapping()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add rule
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead><tr><th>Pattern</th><th>Category</th><th>Confidence</th><th>Last used</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="m in mappings" :key="m.id">
+              <tr>
+                <td class="font-mono text-xs" x-text="m.pattern"></td>
+                <td x-text="categoryName(m.category_id)"></td>
+                <td>
+                  <div class="w-24 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div class="h-1.5 rounded-full bg-primary-500" :style="`width:${m.confidence}%`"></div>
+                  </div>
+                </td>
+                <td class="text-xs text-gray-400" x-text="m.last_used_at ? formatRelative(m.last_used_at) : 'never'"></td>
+                <td class="text-right">
+                  <button class="btn btn-ghost btn-sm" @click="deleteMapping(m)">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  </button>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="mappings.length === 0">
+              <td colspan="5" class="text-center text-sm text-gray-400 py-6">No rules yet — categorise a few transactions to build them.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RECURRING ============ -->
+  <div x-show="tab === 'recurring'" class="space-y-4">
+    <div class="stat-card p-0 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead><tr><th>Merchant</th><th>Amount</th><th>Frequency</th><th>Next expected</th><th>Confidence</th></tr></thead>
+          <tbody>
+            <template x-for="r in recurring" :key="r.id">
+              <tr>
+                <td class="font-medium" x-text="r.merchant"></td>
+                <td x-text="formatCurrency(r.amount)"></td>
+                <td><span class="badge badge-ignore" x-text="r.frequency"></span></td>
+                <td x-text="formatDate(r.next_expected_date, false)"></td>
+                <td><span class="badge badge-pending" x-text="r.confidence + '%'"></span></td>
+              </tr>
+            </template>
+            <tr x-show="recurring.length === 0">
+              <td colspan="5" class="text-center text-sm text-gray-400 py-6">Nothing recurring detected yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CASHBACK ============ -->
+  <div x-show="tab === 'cashback'" class="space-y-4">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="stat-card">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Expected cashback (6 mo)</p>
+        <p class="text-2xl font-bold text-primary-600" x-text="formatCurrency(cashbackTotals.expected)"></p>
+      </div>
+      <div class="stat-card">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Received</p>
+        <p class="text-2xl font-bold text-green-600" x-text="formatCurrency(cashbackTotals.received)"></p>
+      </div>
+      <div class="stat-card">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Pending</p>
+        <p class="text-2xl font-bold text-yellow-600" x-text="formatCurrency(cashbackTotals.pending)"></p>
+      </div>
+      <div class="stat-card">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Effective rate</p>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="effectiveRate() + '%'"></p>
+      </div>
+    </div>
+
+    <div class="stat-card p-0 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full transaction-table">
+          <thead>
+            <tr><th>Date</th><th>Card</th><th>Merchant</th><th class="text-right">Spend</th>
+                <th class="text-right">Cashback</th><th>Wallet</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <template x-for="c in cashback" :key="c.date + c.merchant">
+              <tr>
+                <td class="whitespace-nowrap text-gray-500" x-text="formatDate(c.date, false)"></td>
+                <td x-text="c.card"></td>
+                <td x-text="c.merchant || '—'"></td>
+                <td class="text-right" x-text="formatCurrency(c.amount)"></td>
+                <td class="text-right font-medium text-primary-600" x-text="formatCurrency(c.cashback_amount)"></td>
+                <td x-text="c.cashback_wallet || '—'"></td>
+                <td>
+                  <span class="badge" :class="'badge-' + (c.cashback_status || 'pending')"
+                        x-text="c.cashback_status || 'pending'"></span>
+                </td>
+              </tr>
+            </template>
+            <tr x-show="cashback.length === 0">
+              <td colspan="7" class="text-center text-sm text-gray-400 py-6">No cashback tracked yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ACCOUNT MODAL ============ -->
+  <template x-if="accountForm">
+    <div class="modal-overlay" @click.self="accountForm = null">
+      <div class="modal-content p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white"
+              x-text="accountForm.id ? 'Edit account' : 'Add account'"></h3>
+          <button class="btn btn-ghost btn-sm" @click="accountForm = null"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="form-label">Holder</label>
+            <select class="form-select" x-model="accountForm.person_id" :disabled="!!accountForm.id">
+              <template x-for="p in persons" :key="p.id">
+                <option :value="p.id" x-text="p.name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Nickname</label>
+            <input type="text" class="form-input" x-model="accountForm.nickname" placeholder="Akshay ICICI Amazon">
+          </div>
+          <div>
+            <label class="form-label">Bank</label>
+            <input type="text" class="form-input" x-model="accountForm.bank_name" placeholder="ICICI">
+          </div>
+          <div>
+            <label class="form-label">Account type</label>
+            <select class="form-select" x-model="accountForm.account_type">
+              <option value="credit_card">Credit card</option>
+              <option value="debit_card">Debit card</option>
+              <option value="savings">Savings</option>
+              <option value="current">Current</option>
+              <option value="upi">UPI handle</option>
+              <option value="wallet">Wallet</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Last 4 digits</label>
+            <input type="text" class="form-input" maxlength="4" x-model="accountForm.last_four" placeholder="4321">
+          </div>
+          <div>
+            <label class="form-label">UPI ID</label>
+            <input type="text" class="form-input" x-model="accountForm.upi_id" placeholder="name@bank">
+          </div>
+        </div>
+
+        <div class="mt-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
+          <p class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Default cashback</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Pre-fills cashback on new transactions from this card. You can still override per transaction.
+          </p>
+          <div class="grid grid-cols-3 gap-2">
+            <input type="number" step="0.01" class="form-input" placeholder="%" x-model.number="accountForm.default_cashback_pct">
+            <select class="form-select" x-model="accountForm.default_cashback_type">
+              <option value="">Type</option>
+              <option value="cash">Cash</option>
+              <option value="points">Points</option>
+              <option value="wallet">Wallet</option>
+            </select>
+            <input type="text" class="form-input" placeholder="Wallet" x-model="accountForm.default_cashback_wallet">
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button class="btn btn-primary" @click="saveAccount()">
+            <i data-lucide="check" class="w-4 h-4"></i> Save
+          </button>
+          <button class="btn btn-ghost" @click="accountForm = null">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ============ CATEGORY MODAL ============ -->
+  <template x-if="categoryForm">
+    <div class="modal-overlay" @click.self="categoryForm = null">
+      <div class="modal-content p-6 max-w-md">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Add subcategory</h3>
+          <button class="btn btn-ghost btn-sm" @click="categoryForm = null"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="form-label">Parent (sets type)</label>
+            <select class="form-select" x-model="categoryForm.parent_id">
+              <template x-for="r in categories" :key="r.id">
+                <option :value="r.id" x-text="r.name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" x-model="categoryForm.name" placeholder="e.g. Pet Care">
+          </div>
+          <div>
+            <label class="form-label">Icon (optional emoji)</label>
+            <input type="text" class="form-input" x-model="categoryForm.icon" placeholder="🐾">
+          </div>
+        </div>
+        <div class="flex gap-2 mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button class="btn btn-primary" @click="saveCategory()">
+            <i data-lucide="check" class="w-4 h-4"></i> Save
+          </button>
+          <button class="btn btn-ghost" @click="categoryForm = null">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+function settingsPage() {
+  return {
+    tab: 'accounts',
+    tabs: [
+      { id: 'accounts',   label: 'Accounts' },
+      { id: 'categories', label: 'Categories' },
+      { id: 'mappings',   label: 'Merchant rules' },
+      { id: 'recurring',  label: 'Recurring' },
+      { id: 'cashback',   label: 'Cashback' }
+    ],
+    accounts: [], persons: [], categories: [], mappings: [], recurring: [], cashback: [],
+    accountForm: null, categoryForm: null,
+    newMapping: { pattern: '', category_id: '' },
+
+    get cashbackTotals() {
+      let expected = 0, received = 0, pending = 0;
+      this.cashback.forEach(c => {
+        expected += c.cashback_amount;
+        if (c.cashback_status === 'received') received += c.cashback_amount;
+        else if (c.cashback_status === 'pending') pending += c.cashback_amount;
+      });
+      return { expected, received, pending };
+    },
+
+    async init() {
+      await this.loadAll();
+    },
+
+    async loadAll() {
+      try {
+        [this.accounts, this.persons, this.categories] = await Promise.all([
+          api('/api/accounts'), api('/api/persons'), api('/api/categories/tree')
+        ]);
+      } catch (e) { console.error(e); }
+      await Promise.all([
+        this.loadMappings(), this.loadRecurring(), this.loadCashback()
+      ]);
+    },
+
+    async loadMappings() {
+      // Mappings are surfaced via a small endpoint
+      try { this.mappings = await api('/api/mappings'); } catch (e) { this.mappings = []; }
+    },
+    async loadRecurring() {
+      try { this.recurring = await api('/api/dashboard/recurring'); } catch (e) { this.recurring = []; }
+    },
+    async loadCashback() {
+      try { const r = await api('/api/dashboard/cashback?months=6'); this.cashback = r.cashback; }
+      catch (e) { this.cashback = []; }
+    },
+
+    personName(id) { const p = this.persons.find(x => x.id === id); return p ? p.name : '—'; },
+    categoryName(id) {
+      const flat = [];
+      this.categories.forEach(r => flat.push(r, ...(r.children || [])));
+      const c = flat.find(x => x.id === id);
+      return c ? c.name : '—';
+    },
+    effectiveRate() {
+      const spend = this.cashback.reduce((a, c) => a + c.amount, 0);
+      return spend ? ((this.cashbackTotals.expected / spend) * 100).toFixed(2) : '0.00';
+    },
+
+    // ---- accounts ----
+    openAccount(a) {
+      this.accountForm = a
+        ? { ...a, default_cashback_pct: Number(a.default_cashback_pct) }
+        : { person_id: this.persons.length ? this.persons[0].id : null,
+            bank_name: '', account_type: 'credit_card',
+            last_four: '', upi_id: '', nickname: '',
+            default_cashback_pct: 0, default_cashback_type: '', default_cashback_wallet: '' };
+    },
+    async saveAccount() {
+      const f = this.accountForm;
+      try {
+        if (f.id) await api('/api/accounts/' + f.id, { method: 'PATCH', body: JSON.stringify(f) });
+        else await api('/api/accounts', { method: 'POST', body: JSON.stringify(f) });
+        showToast('Account saved', 'success');
+        this.accountForm = null;
+        this.accounts = await api('/api/accounts');
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+
+    // ---- categories ----
+    async seedCategories() {
+      // Reference data (persons + default categories) is seeded on boot.
+      try {
+        this.categories = await api('/api/categories/tree');
+        this.persons = await api('/api/persons');
+        showToast('Reloaded categories', 'success');
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+    openCategory() {
+      this.categoryForm = {
+        parent_id: this.categories.length ? this.categories[0].id : null,
+        name: '', icon: ''
+      };
+    },
+    async saveCategory() {
+      try {
+        await api('/api/categories', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: this.categoryForm.name,
+            type: 'expense',
+            parent_id: Number(this.categoryForm.parent_id),
+            icon: this.categoryForm.icon || null,
+            is_system: false
+          })
+        });
+        showToast('Category added', 'success');
+        this.categoryForm = null;
+        this.categories = await api('/api/categories/tree');
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+    async deleteCategory(c) {
+      if (!confirm(`Delete category "${c.name}"?`)) return;
+      try {
+        await api('/api/categories/' + c.id, { method: 'DELETE' });
+        showToast('Category deleted', 'success');
+        this.categories = await api('/api/categories/tree');
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+
+    // ---- mappings ----
+    async addMapping() {
+      if (!this.newMapping.pattern || !this.newMapping.category_id)
+        return showToast('Fill pattern and category', 'warning');
+      try {
+        await api('/api/mappings', { method: 'POST', body: JSON.stringify({
+          pattern: this.newMapping.pattern,
+          category_id: Number(this.newMapping.category_id),
+          confidence: 100
+        })});
+        showToast('Rule added', 'success');
+        this.newMapping = { pattern: '', category_id: '' };
+        await this.loadMappings();
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+    async deleteMapping(m) {
+      try {
+        await api('/api/mappings/' + m.id, { method: 'DELETE' });
+        await this.loadMappings();
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+  };
+}
+</script>
+{% endblock %}

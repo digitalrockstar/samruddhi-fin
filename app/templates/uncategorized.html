@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="reviewPage()" x-init="init()" class="space-y-4">
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Needs review</h1>
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        Transactions we couldn't categorise automatically.
+      </p>
+    </div>
+    <button class="btn btn-secondary" @click="load()">
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i> Refresh
+    </button>
+  </div>
+
+  <!-- Bulk assign bar -->
+  <div x-show="selected.length > 0" x-cloak
+       class="sticky top-16 z-20 flex flex-wrap items-center gap-3 p-3 rounded-xl bg-primary-600 text-white shadow-lg">
+    <span class="text-sm font-medium">
+      <span x-text="selected.length"></span> selected
+    </span>
+    <select class="form-select w-64" x-model="bulkCategoryId">
+      <option value="">Choose category…</option>
+      <template x-for="root in categories" :key="root.id">
+        <optgroup :label="root.name">
+          <template x-for="c in ([root].concat(root.children||[]))" :key="c.id">
+            <option :value="c.id" x-text="c.name"></option>
+          </template>
+        </optgroup>
+      </template>
+    </select>
+    <button class="btn btn-sm bg-white text-primary-700 hover:bg-gray-100" @click="bulkAssign()">
+      <i data-lucide="check" class="w-4 h-4"></i> Assign
+    </button>
+    <button class="btn btn-sm bg-white/20 text-white hover:bg-white/30" @click="bulkSpam()">
+      <i data-lucide="ban" class="w-4 h-4"></i> Mark spam
+    </button>
+    <button class="btn btn-ghost btn-sm !text-white" @click="selected = []">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <!-- List -->
+  <div class="space-y-3">
+    <template x-for="t in transactions" :key="t.id">
+      <div class="stat-card flex flex-col sm:flex-row sm:items-center gap-4">
+        <label class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+          <input type="checkbox" :value="t.id" x-model="selected" class="mt-1 text-primary-600">
+          <div class="min-w-0">
+            <div class="font-medium text-gray-900 dark:text-white truncate"
+                 x-text="t.merchant || 'Unidentified merchant'"></div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" x-text="t.raw_text"></div>
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+              <span class="badge" :class="t.txn_type === 'debit' ? 'badge-expense' : 'badge-income'" x-text="t.txn_type"></span>
+              <span x-show="t.txn_mode" class="badge badge-ignore" x-text="t.txn_mode"></span>
+              <span class="text-xs text-gray-400" x-text="formatDate(t.txn_timestamp)"></span>
+              <span class="text-xs text-gray-400">·</span>
+              <span class="text-xs text-gray-400" x-text="t.person_name"></span>
+            </div>
+          </div>
+        </label>
+
+        <div class="flex items-center gap-2 sm:flex-shrink-0">
+          <span class="font-semibold text-gray-900 dark:text-white" x-text="formatCurrency(t.parsed_amount)"></span>
+          <select class="form-select w-48" x-model="t._pendingCategory" @change="assign(t)">
+            <option value="">Assign category…</option>
+            <template x-for="root in categories" :key="root.id">
+              <optgroup :label="root.name">
+                <template x-for="c in ([root].concat(root.children||[]))" :key="c.id">
+                  <option :value="c.id" x-text="c.name"></option>
+                </template>
+              </optgroup>
+            </template>
+          </select>
+          <button class="btn btn-ghost btn-sm" title="Mark spam" @click="markSpam(t)">
+            <i data-lucide="ban" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <div x-show="transactions.length === 0" class="empty-state">
+      <i data-lucide="check-circle-2"></i>
+      <p class="text-lg font-medium text-gray-700 dark:text-gray-300">All caught up!</p>
+      <p class="text-sm">No transactions need review.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function reviewPage() {
+  return {
+    transactions: [],
+    categories: [],
+    selected: [],
+    bulkCategoryId: '',
+
+    async init() {
+      try {
+        this.categories = await api('/api/categories/tree');
+      } catch (e) { console.error(e); }
+      await this.load();
+    },
+
+    async load() {
+      try {
+        const rows = await api('/api/transactions/uncategorized');
+        this.transactions = rows.map(t => ({ ...t, _pendingCategory: t.category_id || '' }));
+      } catch (e) {
+        console.error(e);
+        showToast('Could not load review queue', 'error');
+      }
+    },
+
+    async assign(t) {
+      if (!t._pendingCategory) return;
+      try {
+        await api('/api/transactions/' + t.id, {
+          method: 'PATCH',
+          body: JSON.stringify({ category_id: Number(t._pendingCategory), needs_review: false })
+        });
+        showToast(`Categorised ${t.merchant || 'transaction'}`, 'success');
+        this.transactions = this.transactions.filter(x => x.id !== t.id);
+      } catch (e) {
+        showToast(e.message, 'error');
+      }
+    },
+
+    async markSpam(t) {
+      await api('/api/transactions/' + t.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_spam: true, needs_review: false })
+      });
+      showToast('Marked as spam', 'success');
+      this.transactions = this.transactions.filter(x => x.id !== t.id);
+    },
+
+    async bulkAssign() {
+      if (!this.bulkCategoryId) return showToast('Pick a category first', 'warning');
+      try {
+        await api('/api/transactions/bulk-categorize', {
+          method: 'POST',
+          body: JSON.stringify({
+            transaction_ids: this.selected.map(Number),
+            category_id: Number(this.bulkCategoryId)
+          })
+        });
+        showToast(`Assigned ${this.selected.length} transactions`, 'success');
+        this.selected = [];
+        this.bulkCategoryId = '';
+        await this.load();
+      } catch (e) { showToast(e.message, 'error'); }
+    },
+
+    async bulkSpam() {
+      try {
+        for (const id of this.selected) {
+          await api('/api/transactions/' + id, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_spam: true, needs_review: false })
+          });
+        }
+        showToast(`Marked ${this.selected.length} as spam`, 'success');
+        this.selected = [];
+        await this.load();
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+  };
+}
+</script>
+{% endblock %}
