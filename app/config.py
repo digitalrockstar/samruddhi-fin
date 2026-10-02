@@ -39,7 +39,7 @@ class Settings(BaseSettings):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+        return _asyncpg_safe_query(url)
 
     @property
     def telegram_enabled(self) -> bool:
@@ -48,6 +48,31 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() in {"production", "prod"}
+
+
+def _asyncpg_safe_query(url: str) -> str:
+    """Translate libpq-style options (Neon's default URL has sslmode=require and
+    channel_binding=require) into what asyncpg accepts, otherwise connect() fails with
+    "unexpected keyword argument 'sslmode'"."""
+    if not url.startswith("postgresql+asyncpg://") or "?" not in url:
+        return url
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    params = []
+    has_ssl = False
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key == "sslmode":
+            if not has_ssl and not any(k == "ssl" for k, _ in parse_qsl(parts.query)):
+                params.append(("ssl", value))
+                has_ssl = True
+        elif key == "channel_binding":
+            continue
+        else:
+            if key == "ssl":
+                has_ssl = True
+            params.append((key, value))
+    return urlunsplit(parts._replace(query=urlencode(params)))
 
 
 def production_problems(s: "Settings") -> list:

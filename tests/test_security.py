@@ -52,3 +52,12 @@ def test_production_requires_password_and_webhook_secret():
                   telegram_bot_token="t", app_password="pw", telegram_webhook_secret="s")
     assert production_problems(ok) == []
     assert production_problems(Settings(database_url="sqlite://")) == []
+
+
+def test_neon_url_options_are_translated_for_asyncpg():
+    base = "postgresql://u:p@ep-x.ap-southeast-1.aws.neon.tech/db"
+    got = Settings(database_url=base + "?sslmode=require&channel_binding=require").async_database_url
+    assert got == "postgresql+asyncpg://u:p@ep-x.ap-southeast-1.aws.neon.tech/db?ssl=require"
+    assert Settings(database_url=base).async_database_url == "postgresql+asyncpg://u:p@ep-x.ap-southeast-1.aws.neon.tech/db"
+    assert "sslmode" not in Settings(database_url="postgres://u:p@h/db?sslmode=require").async_database_url
+    assert Settings(database_url="sqlite+aiosqlite:///./x.db").async_database_url == "sqlite+aiosqlite:///./x.db"
