@@ -201,6 +201,8 @@ class TelegramProcessor:
 
         if replace and row.transaction_id:
             old = await self.db.get(Transaction, row.transaction_id)
+            if old and old.user_edited:
+                return old, "kept: manually edited"
             if old:
                 await self.db.delete(old)
                 await self.db.flush()

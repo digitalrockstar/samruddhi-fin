@@ -216,6 +216,7 @@ async def reprocess(body: ReprocessRequest, db: AsyncSession = Depends(get_db)):
         "rebuilt": 0,
         "no_longer_transactions": 0,
         "failed": 0,
+        "kept_manual": 0,
         "dry_run": body.dry_run,
         "changes": [],
     }
@@ -243,7 +244,9 @@ async def reprocess(body: ReprocessRequest, db: AsyncSession = Depends(get_db)):
             }
         else:
             txn, note = await processor.derive(row, replace=body.replace)
-            if txn is not None:
+            if note.startswith("kept:"):
+                result["kept_manual"] += 1
+            elif txn is not None:
                 result["rebuilt"] += 1
             elif had_txn:
                 result["no_longer_transactions"] += 1

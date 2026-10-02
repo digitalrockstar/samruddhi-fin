@@ -66,3 +66,17 @@ def test_card_outstanding_from_sms_available_limit(c):
     item = next(a for a in c.get("/api/accounts/summary").json()["accounts"] if a["id"] == acc["id"])
     assert item["balance_source"] == "sms", item
     assert Decimal(str(item["balance"])) == Decimal("300000") - Decimal("292489.39")
+
+
+def test_reprocess_keeps_manually_edited_transactions(c):
+    msg = {"message_id": 777002, "date": 1760000500, "chat": {"id": 0}, "from": {"id": 1, "first_name": "t"},
+           "text": "AP- Rs.250.00 spent thru Kotak Bank Debit Card XX6951 at TESTSHOP on 19/10/2025 Avl bal 1000.00 Not you?"}
+    assert c.post("/webhook/telegram", json={"message": msg}).status_code == 200
+    rows = c.get("/api/transactions?search=TESTSHOP").json()
+    rows = rows["items"] if isinstance(rows, dict) else rows
+    assert rows, "transaction should exist"
+    tid = rows[0]["id"]
+    assert c.patch(f"/api/transactions/{tid}", json={"merchant": "MY EDIT"}).status_code == 200
+    r = c.post("/api/raw/reprocess", json={"stale_only": False, "replace": True, "dry_run": False}).json()
+    assert r["kept_manual"] >= 1
+    assert c.get(f"/api/transactions/{tid}").json()["merchant"] == "MY EDIT"

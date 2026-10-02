@@ -343,6 +343,7 @@ async def update_transaction(
 
     for field, value in data.items():
         setattr(t, field, value)
+    t.user_edited = True
 
     if allocations_in is not None:
         await db.execute(
