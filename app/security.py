@@ -8,7 +8,7 @@ calls to /api keep working after one login prompt.
 import base64
 import hmac
 
-OPEN_PATHS = {"/health"}
+OPEN_PATHS = {"/health", "/favicon.ico"}
 OPEN_PREFIXES = ("/webhook/",)
 
 

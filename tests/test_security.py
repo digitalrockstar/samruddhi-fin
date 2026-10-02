@@ -61,3 +61,11 @@ def test_neon_url_options_are_translated_for_asyncpg():
     assert Settings(database_url=base).async_database_url == "postgresql+asyncpg://u:p@ep-x.ap-southeast-1.aws.neon.tech/db"
     assert "sslmode" not in Settings(database_url="postgres://u:p@h/db?sslmode=require").async_database_url
     assert Settings(database_url="sqlite+aiosqlite:///./x.db").async_database_url == "sqlite+aiosqlite:///./x.db"
+
+
+def test_favicon_is_served_without_login():
+    import app.main as m
+    from fastapi.testclient import TestClient
+    r = TestClient(m.app).get("/favicon.ico")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("image/")
+    assert r.content[:4] == b"\x00\x00\x01\x00"      # ICO header
