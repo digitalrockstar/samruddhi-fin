@@ -10,6 +10,7 @@ from app.api import api_router
 from app.config import production_problems, settings
 from app.database import engine, init_db
 from app.security import BasicAuthMiddleware
+from app.version import __version__
 
 TEMPLATES_DIR = "app/templates"
 PAGES = {
@@ -77,4 +78,4 @@ async def page_settings(request: Request):
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "samruddhi-fin"}
+    return {"status": "healthy", "service": "samruddhi-fin", "version": __version__}
