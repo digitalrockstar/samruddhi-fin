@@ -320,3 +320,18 @@ def test_refund_notices_are_not_posted_but_bank_credit_is():
     assert bank.is_transaction and bank.kind == "credit"
     one = parse_sms("Yay! You have received a refund of Rs. 179.00 on your OneCard from GROFERS INDIA PRIVATE.")
     assert one.is_transaction and one.kind == "credit"
+
+
+def test_balance_extraction_variants():
+    from app.services.parser import extract_balance
+    from decimal import Decimal
+    cases = {
+        "Rs. 396.61 spent from Pluxee Meal wallet on 11-07-2024 at ZEPTO . Avl bal Rs.24286.41. Not you call 1800": "24286.41",
+        "INR 4,365.00 spent on YES BANK Card X5003 @ZOMATO 15-08-2024. Avl Lmt INR 292,489.39. SMS BLKCC": "292489.39",
+        "Avl Limit: INR 1,20,000.50\nNot you? SMS BLK": "120000.50",
+        "INR 10 spent. Avl limit INR 5000 For dispute": "5000",
+        "Avl bal in your Kotak A/c XXXX1832 as on 01-07-2024 10:00 AM is INR 480807.69": "480807.69",
+    }
+    for text, want in cases.items():
+        assert extract_balance(text) == Decimal(want), text
+    assert extract_balance("Payment of Rs 500 received. Thank you") is None

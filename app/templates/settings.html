@@ -24,13 +24,25 @@
       </button>
     </div>
 
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" x-show="summary">
+      <div class="stat-card"><p class="text-xs text-gray-500">Assets</p>
+        <p class="text-lg font-semibold" x-text="inr(summary?.totals.assets)"></p></div>
+      <div class="stat-card"><p class="text-xs text-gray-500">Liabilities</p>
+        <p class="text-lg font-semibold" x-text="inr(summary?.totals.liabilities)"></p></div>
+      <div class="stat-card"><p class="text-xs text-gray-500">Net worth</p>
+        <p class="text-lg font-semibold" x-text="inr(summary?.totals.net_worth)"></p></div>
+      <div class="stat-card"><p class="text-xs text-gray-500">Investments (invested / now)</p>
+        <p class="text-sm font-semibold"
+           x-text="inr(summary?.totals.invested) + ' / ' + inr(summary?.totals.investment_value)"></p></div>
+    </div>
+
     <div class="stat-card p-0 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full transaction-table">
           <thead>
             <tr>
               <th>Nickname</th><th>Holder</th><th>Bank</th><th>Type</th>
-              <th>Last 4</th><th>UPI ID</th><th>Default Cashback</th><th></th>
+              <th>Last 4/6</th><th>UPI ID</th><th>Position</th><th>Default Cashback</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -40,8 +52,9 @@
                 <td x-text="personName(a.person_id)"></td>
                 <td x-text="a.bank_name"></td>
                 <td><span class="badge badge-ignore" x-text="a.account_type"></span></td>
-                <td class="font-mono text-xs" x-text="a.last_four || '—'"></td>
+                <td class="font-mono text-xs" x-text="a.last_six || a.last_four || '—'"></td>
                 <td class="font-mono text-xs" x-text="a.upi_id || '—'"></td>
+                <td class="text-xs" x-html="position(a)"></td>
                 <td>
                   <span x-show="Number(a.default_cashback_pct) > 0">
                     <span x-text="Number(a.default_cashback_pct) + '%'"></span>
@@ -274,16 +287,45 @@
               <option value="current">Current</option>
               <option value="upi">UPI handle</option>
               <option value="wallet">Wallet</option>
+              <option value="loan">Loan account</option>
+              <option value="mutual_fund">Mutual fund</option>
+              <option value="fixed_deposit">Fixed deposit</option>
+              <option value="stocks">Stocks / demat</option>
+              <option value="other_investment">Other investment</option>
             </select>
           </div>
           <div>
-            <label class="form-label">Last 4 digits</label>
-            <input type="text" class="form-input" maxlength="4" x-model="accountForm.last_four" placeholder="4321">
+            <label class="form-label">Last 6 digits</label>
+            <input type="text" class="form-input" maxlength="6" x-model="accountForm.last_six" placeholder="123456">
+          </div>
+          <div>
+            <label class="form-label">Last 4 digits (SMS match)</label>
+            <input type="text" class="form-input" maxlength="4" x-model="accountForm.last_four" placeholder="auto from last 6">
           </div>
           <div>
             <label class="form-label">UPI ID</label>
             <input type="text" class="form-input" x-model="accountForm.upi_id" placeholder="name@bank">
           </div>
+        </div>
+
+        <div class="mt-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 space-y-2">
+          <p class="text-sm font-semibold text-gray-900 dark:text-white">Balance and value</p>
+          <div x-show="!isInvestment(accountForm.account_type)" class="grid grid-cols-2 gap-2">
+            <div x-show="accountForm.account_type === 'credit_card'">
+              <label class="form-label">Credit limit</label>
+              <input type="number" step="0.01" class="form-input" x-model="accountForm.credit_limit"></div>
+            <div>
+              <label class="form-label"
+                    x-text="['credit_card','loan'].includes(accountForm.account_type) ? 'Outstanding now' : 'Balance now'"></label>
+              <input type="number" step="0.01" class="form-input" x-model="accountForm.balance"></div>
+          </div>
+          <div x-show="isInvestment(accountForm.account_type)" class="grid grid-cols-2 gap-2">
+            <div><label class="form-label">Invested</label>
+              <input type="number" step="0.01" class="form-input" x-model="accountForm.invested_amount"></div>
+            <div><label class="form-label">Current value</label>
+              <input type="number" step="0.01" class="form-input" x-model="accountForm.current_value"></div>
+          </div>
+          <input type="text" class="form-input" maxlength="500" placeholder="Notes" x-model="accountForm.notes">
         </div>
 
         <div class="mt-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800">
@@ -361,7 +403,7 @@ function settingsPage() {
       { id: 'recurring',  label: 'Recurring' },
       { id: 'cashback',   label: 'Cashback' }
     ],
-    accounts: [], persons: [], categories: [], mappings: [], recurring: [], cashback: [],
+    accounts: [], summary: null, persons: [], categories: [], mappings: [], recurring: [], cashback: [],
     accountForm: null, categoryForm: null,
     newMapping: { pattern: '', category_id: '' },
 
@@ -386,7 +428,7 @@ function settingsPage() {
         ]);
       } catch (e) { console.error(e); }
       await Promise.all([
-        this.loadMappings(), this.loadRecurring(), this.loadCashback()
+        this.loadMappings(), this.loadRecurring(), this.loadCashback(), this.loadSummary()
       ]);
     },
 
@@ -415,22 +457,39 @@ function settingsPage() {
     },
 
     // ---- accounts ----
+    isInvestment(t) { return ['mutual_fund','fixed_deposit','stocks','other_investment'].includes(t); },
+    inr(v) { return v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 0 }); },
+    position(a) {
+      const r = (this.summary?.accounts || []).find(x => x.id === a.id);
+      if (!r) return '—';
+      if (this.isInvestment(a.account_type))
+        return r.current_value == null ? '—' : this.inr(r.invested_amount) + ' → ' + this.inr(r.current_value);
+      if (r.balance == null) return r.available_limit != null ? 'Avail ' + this.inr(r.available_limit) : '—';
+      const tag = r.balance_source === 'sms' ? 'SMS' : 'manual';
+      return this.inr(r.balance) + ' <span class="text-gray-400">(' + tag + ')</span>';
+    },
+    async loadSummary() { try { this.summary = await api('/api/accounts/summary'); } catch (e) {} },
     openAccount(a) {
       this.accountForm = a
         ? { ...a, default_cashback_pct: Number(a.default_cashback_pct) }
         : { person_id: this.persons.length ? this.persons[0].id : null,
             bank_name: '', account_type: 'credit_card',
-            last_four: '', upi_id: '', nickname: '',
+            last_four: '', last_six: '', upi_id: '', nickname: '', notes: '',
+            credit_limit: null, balance: null, invested_amount: null, current_value: null,
             default_cashback_pct: 0, default_cashback_type: '', default_cashback_wallet: '' };
     },
     async saveAccount() {
-      const f = this.accountForm;
+      const f = { ...this.accountForm };
+      ['balance_as_of', 'valuation_as_of', 'created_at'].forEach(k => delete f[k]);
+      ['credit_limit', 'balance', 'invested_amount', 'current_value', 'last_six', 'last_four', 'notes']
+        .forEach(k => { if (f[k] === '' || f[k] === undefined) f[k] = null; });
       try {
         if (f.id) await api('/api/accounts/' + f.id, { method: 'PATCH', body: JSON.stringify(f) });
         else await api('/api/accounts', { method: 'POST', body: JSON.stringify(f) });
         showToast('Account saved', 'success');
         this.accountForm = null;
         this.accounts = await api('/api/accounts');
+        await this.loadSummary();
       } catch (e) { showToast(e.message, 'error'); }
     },
 

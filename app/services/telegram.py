@@ -306,6 +306,7 @@ class TelegramProcessor:
             txn_mode=parsed.txn_mode,
             merchant=parsed.merchant,
             upi_ref=parsed.upi_ref,
+            balance_after=parsed.balance,
             txn_timestamp=parsed.txn_timestamp or row.received_at or datetime.now(),
             is_spam=False,
             needs_review=needs_review,

@@ -690,15 +690,20 @@ def extract_ref(text: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+_BAL_LABEL = (r"(?:avl\.?|avail(?:able)?|avbl)\s*(?:bal(?:ance)?|lmt|limit|credit\s*limit)"
+              r"|combined\s*bal|\bbal(?:ance)?\b")
+
+
 def extract_balance(text: str) -> Optional[Decimal]:
-    """Balance / available-limit figure, when the message is only reporting one."""
-    m = re.search(
-        r"(?:avl\s*bal|avail(?:able)?\s*bal|available\s*(?:credit\s*)?limit|"
-        r"combined\s*bal|bal(?:ance)?)"
-        r"[\s\S]{0,60}?(?:is|:)\s*"
-        r"(?:rs\.?|inr|₹)\s*(" + NUM + ")",
-        text, re.IGNORECASE,
-    )
+    """Balance / available-limit figure printed in the message.
+
+    Handles "Avl bal Rs.24286.41", "Avl Lmt: INR 2,84,850.00", "Avl limit INR 1234",
+    and the older "balance ... is Rs X" wording.
+    """
+    m = (re.search(rf"(?:{_BAL_LABEL})\s*(?:is|=)?\s*[:\-]?\s*(?:rs\.?|inr|₹)\s*({NUM})",
+                   text, re.IGNORECASE)
+         or re.search(rf"(?:{_BAL_LABEL})[\s\S]{{0,60}}?(?:is|:)\s*(?:rs\.?|inr|₹)\s*({NUM})",
+                      text, re.IGNORECASE))
     return _to_decimal(m.group(1)) if m else None
 
 

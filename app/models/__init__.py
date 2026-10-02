@@ -26,6 +26,11 @@ class AccountType(str, enum.Enum):
     CURRENT = "current"
     UPI = "upi"
     WALLET = "wallet"
+    LOAN = "loan"
+    MUTUAL_FUND = "mutual_fund"
+    FIXED_DEPOSIT = "fixed_deposit"
+    STOCKS = "stocks"
+    OTHER_INVESTMENT = "other_investment"
 
 
 class CashbackType(str, enum.Enum):
@@ -42,8 +47,23 @@ class Account(Base):
     bank_name = Column(String(100), nullable=False)
     account_type = Column(SQLEnum(AccountType), nullable=False)
     last_four = Column(String(4))
+    last_six = Column(String(6))
     upi_id = Column(String(100))
     nickname = Column(String(50))
+    notes = Column(String(500))
+
+    # Money position. For savings/current/wallet: `balance` is cash held.
+    # For credit cards and loans: `balance` is the OUTSTANDING amount owed.
+    # Cards also carry `credit_limit`. `balance` is a manual checkpoint; SMS-reported
+    # balances newer than `balance_as_of` take over (see /api/accounts/summary).
+    credit_limit = Column(Numeric(15, 2))
+    balance = Column(Numeric(15, 2))
+    balance_as_of = Column(DateTime(timezone=True))
+
+    # Investments (MF / FD / stocks / other): updated by hand, infrequently.
+    invested_amount = Column(Numeric(15, 2))
+    current_value = Column(Numeric(15, 2))
+    valuation_as_of = Column(DateTime(timezone=True))
     
     # Cashback defaults at card level
     default_cashback_pct = Column(Numeric(5, 2), default=0)
@@ -140,6 +160,8 @@ class Transaction(Base):
     txn_mode = Column(SQLEnum(TransactionMode))
     merchant = Column(String(200))
     upi_ref = Column(String(100))
+    # Balance (or card available limit) printed in the SMS after this transaction.
+    balance_after = Column(Numeric(15, 2))
     txn_timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     received_at = Column(DateTime(timezone=True), server_default=func.now())
     

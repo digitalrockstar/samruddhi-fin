@@ -12,6 +12,11 @@ class AccountType(str, Enum):
     CURRENT = "current"
     UPI = "upi"
     WALLET = "wallet"
+    LOAN = "loan"
+    MUTUAL_FUND = "mutual_fund"
+    FIXED_DEPOSIT = "fixed_deposit"
+    STOCKS = "stocks"
+    OTHER_INVESTMENT = "other_investment"
 
 
 class CashbackType(str, Enum):
@@ -87,6 +92,14 @@ class AccountBase(BaseModel):
     last_four: Optional[str] = None
     upi_id: Optional[str] = None
     nickname: Optional[str] = None
+    last_six: Optional[str] = None
+    notes: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    balance: Optional[Decimal] = None
+    balance_as_of: Optional[datetime] = None
+    invested_amount: Optional[Decimal] = None
+    current_value: Optional[Decimal] = None
+    valuation_as_of: Optional[datetime] = None
     default_cashback_pct: Decimal = Decimal("0")
     default_cashback_type: Optional[CashbackType] = None
     default_cashback_wallet: Optional[str] = None
@@ -103,6 +116,14 @@ class AccountUpdate(BaseModel):
     last_four: Optional[str] = None
     upi_id: Optional[str] = None
     nickname: Optional[str] = None
+    last_six: Optional[str] = None
+    notes: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    balance: Optional[Decimal] = None
+    balance_as_of: Optional[datetime] = None
+    invested_amount: Optional[Decimal] = None
+    current_value: Optional[Decimal] = None
+    valuation_as_of: Optional[datetime] = None
     default_cashback_pct: Optional[Decimal] = None
     default_cashback_type: Optional[CashbackType] = None
     default_cashback_wallet: Optional[str] = None
