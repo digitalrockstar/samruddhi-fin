@@ -94,7 +94,9 @@ DATE_PATTERNS: List[Tuple[str, str]] = [
     # 05-JUL  /  01/JUL  (NO YEAR - year comes from the SMS timestamp)
     ("dmy_guess", rf"(\d{{1,2}})[-/]({MONTH_CAP})"),
     # 12-08  (NO YEAR)
-    ("dmy_guess", r"(\d{1,2})[-/](\d{1,2})(?![-/\d])"),
+    # Excludes ranges such as "3-5 business days" / "2-3 days" / "4-7 working".
+    ("dmy_guess", r"(?<![\d./-])(\d{1,2})[-/](\d{1,2})(?![-/\d])"
+                  r"(?!\s*(?:business|working|days?|hrs?|hours?|mins?|minutes?|weeks?|months?|%))"),
 ]
 
 COMPILED_DATES = [
@@ -308,6 +310,11 @@ RULES: List[Rule] = [
           r"|\bcan be used\b|\bunused balance\b|\bwallet (?:balance|amount)\b",
           NOT_POSTED, reason=R_ENVELOPE),
 
+    # Card cashback landing as a statement credit (must sit before promo_offer,
+    # which treats "Congratulations" as marketing).
+    _rule("cashback_credited",
+          rf"\bcashback of\s+{AMT}\s+(?:has been|is|was)\s+credited\b[\s\S]{{0,80}}?(\d{{4}})\b",
+          POSTED, kind=K_CREDIT, account_group="3"),
     _rule("promo_offer",
           r"\bpre-?approved\b|\bloan up to\b|\beligib|\bGet \d+% off\b|\buse code\b"
           r"|\boffer ends\b|\bT&C\b|\bClaim now\b|\bclick here to know more\b"
@@ -326,9 +333,28 @@ RULES: List[Rule] = [
           r"|\bwe(?:'ve| have)? (?:launched|introduced)\b|\bnewly launched\b",
           NOT_POSTED, reason=R_PROMO),
 
+    # Loan offers, telecom plan/recharge nudges, streaming promos and non-English
+    # (Indic script) carrier texts. They quote a rupee figure but no money moves.
+    # The leading guard keeps genuine alerts ("debited", "spent" ...) out of it.
+    _rule("promo_loans_telecom_media",
+          r"^(?![\s\S]*\b(?:debited|credited|spent|withdrawn|disbursed)\b)[\s\S]*?(?:"
+          r"[\u0900-\u097F\u0980-\u09FF\u0A80-\u0AFF\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]{4,}"
+          r"|\b(?:personal|home|instant|urgent)\s+loans?\b"
+          r"|\bloans?\s+(?:of|up to)\s+(?:Rs|INR)\b|\bGet (?:a\s+)?Loan\b|\bFIRSTmoney\b"
+          r"|\bavailable for disbursal\b|\binstant funds\b|\bfunds fast\b|\bShort on funds\b"
+          r"|\bLooking for a loan\b|\bApplication received\b[\s\S]{0,40}\bapplication\b"
+          r"|\bWatch\b[\s\S]{0,80}\b(?:Prime Video|JioHotstar|Hotstar|Netflix|only on)\b"
+          r"|\bVi (?:Max|Postpaid)\b|\bVacation Offer\b|\bExtra Data\b|\bdata quota\b"
+          r"|\brecharge plan\b|\b(?:free )?plan (?:has )?expired\b|\bplan expiring\b"
+          r"|\bin \d+ seconds\b|\bSet-Top Box\b|\bget unlimited\b|\bWorry-free browsing\b"
+          r"|\bDO NOT SHARE!|\bOTP for additional verification\b|\bis the OTP\b|\bRESEND\b[\s\S]{0,12}\bOTP\b"
+          r"|\bhealth insurance\b[\s\S]{0,60}\bcover\b|\bYour [A-Za-z]+-?\d{4} bill of\b|\bHope you love using\b"
+          r")",
+          NOT_POSTED, reason=R_PROMO),
+
     # ---------------- POSTED: credit-card payment (transfer) ----------------
     _rule("cc_payment_received_hdfc",
-          r"payment of\s+" + AMT + r"\s+received towards your credit card"
+          r"payment of\s+" + AMT + r"\s+received (?:towards|for) your credit card"
           r"[\s\S]{0,80}?(?:ending(?: with)?\s+)?(\d{4})",
           POSTED, kind=K_TRANSFER, mode=TransactionMode.CARD,
           account_group="3"),
@@ -475,11 +501,22 @@ def _to_decimal(raw: Optional[str]) -> Optional[Decimal]:
         return None
 
 
-def _amt_from_match(m: re.Match) -> Optional[Decimal]:
+def _amt_from_match(m: re.Match, rule: Optional[Rule] = None) -> Optional[Decimal]:
     if not m:
         return None
-    # Every AMT capture is two consecutive groups: (rs-first | rs-last)
-    for g in m.groups():
+    # Every AMT capture is two consecutive groups: (rs-first | rs-last).
+    # Skip groups the rule uses for something else (card digits, ref no. ...):
+    # a 4-digit account group captured before the amount used to be returned
+    # as the amount.
+    skip = set()
+    if rule is not None:
+        for g in (rule.account_group, rule.ref_group, rule.merchant_group,
+                  rule.handle_group, rule.date_group):
+            if g is not None and str(g).isdigit():
+                skip.add(int(g))
+    for i, g in enumerate(m.groups(), start=1):
+        if i in skip:
+            continue
         d = _to_decimal(g)
         if d is not None:
             return d
@@ -749,7 +786,7 @@ def parse_sms(text: str, received_at: Optional[datetime] = None) -> ParsedSMS:
     out.verdict = POSTED
 
     if m:
-        out.amount = _amt_from_match(m)
+        out.amount = _amt_from_match(m, rule)
     if out.amount is None:
         # Fall back to the first currency-tagged number in the message.
         out.amount = _amt_from_match(re.search(AMT, flat, re.IGNORECASE)) or Decimal("0")

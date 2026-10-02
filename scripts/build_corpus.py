@@ -27,20 +27,26 @@ NOT_POSTED = [
     r"Auto-?Pay \(E-mandate\) Failed", r"\bfailed as\b",
     r"is scheduled", r"will be auto ?debited", r"scheduled for AutoPay",
     r"scheduled on", r"\bwill be auto\b",
-    r"Avl [Bb]al", r"Avl Lmt\b.*\bnot\b", r"available credit limit is",
-    r"Combined Bal", r"Total due amt", r"Min due amt", r"Payment is due",
+        r"Total due amt", r"Min due amt", r"Payment is due",
     r"Amt Due", r"Total Due:", r"Min Due:",
     r"\bpre-?approved\b", r"\bloan up to\b", r"eligib", r"Statement:",
     r"statement is ready", r"\bDue by:", r"\bDue Date:",
-    r"cashback! Get", r"Get \d+% off", r"\buse code\b", r"offer ends",
-    r"T&C", r"T&C apply", r"Claim now", r"click here to know more",
-    r"\brecharge\b.*\bplan\b", r"data validity", r"GB", r"unlimited",
-    r"insurance renewal", r"\bEMI options\b", r"convert into easy EMIs",
+                r"insurance renewal", r"\bEMI options\b", r"convert into easy EMIs",
+]
+
+# Weak signals: real debit alerts also carry "Avl Bal", "if not you", "5GB" etc.,
+# so these only mean not-posted when no posted phrase matched.
+WEAK_NOT_POSTED = [
+    r"\bAvl [Bb]al\b", r"available credit limit is", r"Combined Bal",
+    r"cashback! Get", r"Get \d+% off", r"\buse code\b", r"offer ends", r"T&C", r"Claim now",
+    r"click here to know more", r"\brecharge\b.*\bplan\b", r"data validity",
+    r"\d\s?GB\b", r"\bunlimited\b", r"\bfor free\b", r"\bfree plan\b", r"Set-Top Box",
+    r"\bhome loan\b.*\bapplication\b", r"APPLICATION RECEIVED", r"\bloan\b.*\b(?:offer|apply|approved)",
 ]
 
 # --- Phrases that mean money actually posted ------------------------------
 POSTED_DEBIT = re.compile(
-    r"\bspent on\b|\bAmt Sent\b|\bSent\b.*\bfrom\b.*\bto\b|\bTxn\b.*\bOn\b.*\bCard\b|"
+    r"\bspent (?:on|from|Rs|INR|thru)\b|\byou.ve spent\b|\bAmt Sent\b|\bSent\b.*\bfrom\b.*\bto\b|\bTxn\b.*\bOn\b.*\bCard\b|"
     r"\bdebited\b|\bpayment of\b.*\bAuto-?Pay\b|\bwithdrawn\b",
     re.IGNORECASE,
 )
@@ -62,6 +68,11 @@ def label(body: str) -> str:
     for pat in NOT_POSTED:
         if re.search(pat, body, re.IGNORECASE):
             return "not_posted"
+    has_posted = bool(POSTED_DEBIT.search(body) or POSTED_CREDIT.search(body) or PAYMENT_TOWARDS_CC.search(body))
+    if not has_posted:
+        for pat in WEAK_NOT_POSTED:
+            if re.search(pat, body, re.IGNORECASE):
+                return "not_posted"
     if PAYMENT_TOWARDS_CC.search(body):
         return "posted_transfer"
     if POSTED_DEBIT.search(body):

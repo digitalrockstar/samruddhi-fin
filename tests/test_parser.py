@@ -276,3 +276,32 @@ def test_balance_is_captured_but_not_a_transaction():
     p = parse_sms("Avl bal in your Kotak A/c XXXX1832 as on 01-07-2024 10:00 AM is INR 480807.69")
     assert p.verdict == NOT_POSTED
     assert p.balance == Decimal("480807.69")
+
+def test_delivery_ranges_are_not_dates():
+    from app.services.parser import parse_date
+    from datetime import datetime
+    ref = datetime(2024, 7, 18, 17, 43)
+    for txt in ("It should reflect in your account in 3-5 business days.",
+                "will get refunded within 2-3 days", "reflect in 4-7 business days",
+                "should reach your A/C in 3-5 working days"):
+        assert parse_date(txt, ref) is None
+    assert parse_date("txn on 12/08 at store", ref) == datetime(2024, 8, 12)
+
+
+def test_account_digits_are_not_the_amount():
+    from app.services.parser import parse_sms
+    from decimal import Decimal
+    p = parse_sms("Dear Smart Pay Customer,We have successfully debited your HDFC Bank Credit card "
+                  "ending 1234 to pay your SpayBBPS  08041 bill for the amount Rs 1178.82")
+    assert p.amount == Decimal("1178.82") and p.account_last_four == "1234"
+
+
+def test_cashback_credit_and_loan_promo():
+    from app.services.parser import parse_sms
+    from decimal import Decimal
+    c = parse_sms("Congratulations! Cashback of INR 25 has been credited to your Axis Bank Flipkart "
+                  "Credit Card XX1234 towards your last month spends - Axis Bank")
+    assert c.is_transaction and c.kind == "credit" and c.amount == Decimal("25")
+    for promo in ("Dear Customer, get a personal loan of Rs. 500000 from IDFC FIRST Bank today",
+                  "Worry-free browsing for as LOW as Rs30! Now you can buy an add-on data pack"):
+        assert not parse_sms(promo).is_transaction
