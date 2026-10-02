@@ -305,3 +305,18 @@ def test_cashback_credit_and_loan_promo():
     for promo in ("Dear Customer, get a personal loan of Rs. 500000 from IDFC FIRST Bank today",
                   "Worry-free browsing for as LOW as Rs30! Now you can buy an add-on data pack"):
         assert not parse_sms(promo).is_transaction
+
+
+def test_refund_notices_are_not_posted_but_bank_credit_is():
+    from app.services.parser import parse_sms
+    for pending in (
+        "Refund of Rs 98.0 has been initiated for your Zepto order 7F892BSPL87414. It should reflect in your account in 3-5 business days.",
+        "We have processed a refund of Rs 240.65 for your Apollo247 order 315781050, the amount should reflect in your A/C in 3-5 working days",
+        "Rs 444.0 refunded to your account & will reflect in 48hrs. Refund reference no. is 4287368",
+        "We have initiated a refund of Rs.4.00 for ORD341352280 back to your card, which should reflect in 4-7 business days. -blinkit",
+    ):
+        assert not parse_sms(pending).is_transaction, pending
+    bank = parse_sms("Rs. 2667.6 has been credited to your SBI Credit Card xxxx4901, towards reversal/cashback from AMAZON PAY INDIA PRIVA Bangalore IN on 10/10/24")
+    assert bank.is_transaction and bank.kind == "credit"
+    one = parse_sms("Yay! You have received a refund of Rs. 179.00 on your OneCard from GROFERS INDIA PRIVATE.")
+    assert one.is_transaction and one.kind == "credit"

@@ -312,6 +312,12 @@ RULES: List[Rule] = [
 
     # Card cashback landing as a statement credit (must sit before promo_offer,
     # which treats "Congratulations" as marketing).
+    # Card reversal / refund landing on the card ("towards reversal/cashback from X").
+    # Was falling through to the generic fallback and being booked as a DEBIT.
+    _rule("card_reversal_credited",
+          rf"{AMT}\s+(?:has been|is|was)\s+credited\s+to\s+your\s+[\w\s]{{0,30}}?card\s+(?:no\.?\s*)?[xX*]*(\d{{4}})"
+          rf"[\s\S]{{0,40}}?towards\s+(?:reversal|refund|cashback)",
+          POSTED, kind=K_CREDIT, mode=TransactionMode.CARD, account_group="3"),
     _rule("cashback_credited",
           rf"\bcashback of\s+{AMT}\s+(?:has been|is|was)\s+credited\b[\s\S]{{0,80}}?(\d{{4}})\b",
           POSTED, kind=K_CREDIT, account_group="3"),
@@ -350,6 +356,16 @@ RULES: List[Rule] = [
           r"|\bDO NOT SHARE!|\bOTP for additional verification\b|\bis the OTP\b|\bRESEND\b[\s\S]{0,12}\bOTP\b"
           r"|\bhealth insurance\b[\s\S]{0,60}\bcover\b|\bYour [A-Za-z]+-?\d{4} bill of\b|\bHope you love using\b"
           r")",
+          NOT_POSTED, reason=R_PROMO),
+
+    # Refund notices that only announce a refund. Money lands later and the bank
+    # sends its own credit SMS, which is the one we record (on the bank's day).
+    _rule("refund_pending",
+          r"\brefund(?:ed|s)?\b[\s\S]{0,140}?\b(?:has been initiated|have initiated|is initiated|initiated|"
+          r"will (?:be )?(?:credited|reflect|reversed|refunded|processed)|should reflect|"
+          r"will get refunded|\d+(?:\s*-\s*\d+)?\s*(?:business|working)\s*days|within\s+\d+\s*(?:-\s*\d+\s*)?(?:hrs|hours|days))"
+          r"|\b(?:initiated|processed)\s+(?:a\s+)?refund\b"
+          r"|\bRefund (?:Update|Initiated)\b|\bwill be reversed\b",
           NOT_POSTED, reason=R_PROMO),
 
     # ---------------- POSTED: credit-card payment (transfer) ----------------

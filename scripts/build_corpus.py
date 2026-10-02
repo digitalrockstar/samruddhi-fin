@@ -37,6 +37,8 @@ NOT_POSTED = [
 # Weak signals: real debit alerts also carry "Avl Bal", "if not you", "5GB" etc.,
 # so these only mean not-posted when no posted phrase matched.
 WEAK_NOT_POSTED = [
+    r"\brefund\b[\s\S]{0,140}?(?:initiated|will (?:be )?(?:credited|reflect|reversed|refunded|processed)|should reflect|\d+\s*-?\s*\d*\s*(?:business|working)\s*days)",
+    r"\b(?:initiated|processed)\s+(?:a\s+)?refund\b", r"\bRefund (?:Update|Initiated)\b",
     r"\bAvl [Bb]al\b", r"available credit limit is", r"Combined Bal",
     r"cashback! Get", r"Get \d+% off", r"\buse code\b", r"offer ends", r"T&C", r"Claim now",
     r"click here to know more", r"\brecharge\b.*\bplan\b", r"data validity",
@@ -68,7 +70,7 @@ def label(body: str) -> str:
     for pat in NOT_POSTED:
         if re.search(pat, body, re.IGNORECASE):
             return "not_posted"
-    has_posted = bool(POSTED_DEBIT.search(body) or POSTED_CREDIT.search(body) or PAYMENT_TOWARDS_CC.search(body))
+    has_posted = bool(POSTED_DEBIT.search(body) or PAYMENT_TOWARDS_CC.search(body) or re.search(r"\bcredited to your\b|\breceived .* in your\b|\bhas been credited to\b", body, re.I))
     if not has_posted:
         for pat in WEAK_NOT_POSTED:
             if re.search(pat, body, re.IGNORECASE):
