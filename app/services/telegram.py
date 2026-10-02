@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional, Tuple
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -176,7 +177,12 @@ class TelegramProcessor:
             txn_date_hint=_hint_to_datetime(time_hint, meta.get("received_at")),
         )
         self.db.add(row)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # A concurrent retry won the race on (source, external_id).
+            await self.db.rollback()
+            return None
         await self.db.refresh(row)
         return row
 

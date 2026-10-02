@@ -247,3 +247,28 @@ async def test_income_creates_income_from_allocation(session):
     ).scalars().all()
     assert AllocationType.INCOME_FROM in {a.allocation_type for a in allocs}
     assert AllocationType.EXPENSE_FOR not in {a.allocation_type for a in allocs}
+
+@pytest.mark.asyncio
+async def test_ingest_raw_survives_unique_violation(session):
+    """A concurrent retry that loses the race returns None instead of raising."""
+    from app.services.telegram import TelegramProcessor
+    p = TelegramProcessor(session)
+    first = await p.ingest_raw("AP- Rs 10 debited at X", external_id=991, meta={})
+    assert first is not None
+    # Simulate the race: bypass the pre-check so the insert itself collides.
+    orig = session.execute
+    calls = {"n": 0}
+
+    async def skip_precheck(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:  # the duplicate pre-check inside ingest_raw
+            class R:
+                def scalar_one_or_none(self): return None
+            return R()
+        return await orig(*a, **k)
+
+    session.execute = skip_precheck
+    try:
+        assert await p.ingest_raw("AP- Rs 10 debited at X", external_id=991, meta={}) is None
+    finally:
+        session.execute = orig

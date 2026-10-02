@@ -3,11 +3,12 @@
 Expected text format: "AP- <sms>" or "AS- <sms>" (prefix = who paid).
 Message ID is used for idempotency, so a retried Telegram update is a no-op.
 """
+import hmac
 from typing import Any, Dict, Optional
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,11 +26,12 @@ async def telegram_webhook(
     x_telegram_bot_api_secret_token: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db),
 ):
-    # Optional extra guard. When TELEGRAM_WEBHOOK_SECRET is unset we rely on the
-    # chat-id check below as the only gate.
+    # In production the secret is mandatory (startup refuses to boot without it).
+    # Outside production it is enforced whenever it is configured.
     if settings.telegram_webhook_secret:
-        if x_telegram_bot_api_secret_token != settings.telegram_webhook_secret:
-            return {"ok": False, "error": "bad secret token"}
+        got = x_telegram_bot_api_secret_token or ""
+        if not hmac.compare_digest(got.encode(), settings.telegram_webhook_secret.encode()):
+            raise HTTPException(status_code=403, detail="forbidden")
 
     try:
         update: Dict[str, Any] = await request.json()

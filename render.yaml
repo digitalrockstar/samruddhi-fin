@@ -24,8 +24,7 @@ services:
       # ------------------------------------------------------------------
       # SECRET_KEY - any long random string.
       #   python -c "import secrets; print(secrets.token_urlsafe(48))"
-      # Currently unused at runtime, but validated so you cannot ship the
-      # insecure default to production.
+      # Validated at boot so the insecure default cannot reach production.
       - key: SECRET_KEY
         generateValue: true
 
@@ -38,13 +37,19 @@ services:
         sync: false
 
       # ------------------------------------------------------------------
-      # NOT set here on purpose - the app runs fine without them.
-      #
-      # TELEGRAM_WEBHOOK_SECRET - optional second guard on the webhook. The
-      #   webhook already rejects any chat id that does not match
-      #   TELEGRAM_CHAT_ID, so this is belt-and-braces. Add it in the Render
-      #   dashboard if you ever want it.
-      #
+      # LOGIN for the dashboard and API (HTTP Basic). The app refuses to boot
+      # in production without APP_PASSWORD.
+      - key: APP_USERNAME
+        value: samruddhi
+      - key: APP_PASSWORD
+        sync: false
+
+      # Required in production. Must match the secret_token passed to Telegram's
+      # setWebhook (scripts/setup_webhook.py sends it from your local .env).
+      #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+
       # WEBHOOK_URL - only read by scripts/setup_webhook.py, which you run on
       #   your own machine. Put it in your LOCAL .env, not here.
 

@@ -1,13 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api import api_router
+from app.config import production_problems, settings
 from app.database import engine, init_db
+from app.security import BasicAuthMiddleware
 
 TEMPLATES_DIR = "app/templates"
 PAGES = {
@@ -20,6 +21,9 @@ PAGES = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    problems = production_problems(settings)
+    if problems:
+        raise RuntimeError("Refusing to start: " + "; ".join(problems))
     await init_db()
     yield
     await engine.dispose()
@@ -32,13 +36,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.app_password:
+    app.add_middleware(BasicAuthMiddleware, username=settings.app_username, password=settings.app_password)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
