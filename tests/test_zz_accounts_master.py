@@ -105,3 +105,14 @@ def test_formats_queue_ignore_learns_the_format(c):
     did = next(d["id"] for d in c.get("/api/formats/decided").json() if d["skeleton"] == item["skeleton"])
     assert c.delete(f"/api/formats/{did}").status_code == 200
     assert [i for i in c.get("/api/formats/queue").json()["items"] if "instant cash alert" in i["example"].lower()]
+
+
+def test_ingest_log_explains_skips_and_channel_posts_are_ingested(c):
+    c.post("/webhook/telegram", json={"update_id": 1, "my_chat_member": {"x": 1}})
+    c.post("/webhook/telegram", json={"update_id": 2, "channel_post": {
+        "message_id": 777301, "date": 1760002000, "chat": {"id": -100123},
+        "text": "AP- Rs.99.00 spent thru Kotak Bank Debit Card XX6951 at CHANNELSHOP on 19/10/2025 Avl bal 500.00"}})
+    log = c.get("/api/raw/ingest-log").json()
+    assert log[0]["outcome"] == "stored" and "channel_post" in log[0]["update_keys"]
+    assert log[1]["outcome"].startswith("skipped: no message") and log[1]["update_keys"] == ["my_chat_member"]
+    assert "text" not in str(log)

@@ -127,6 +127,13 @@ async def list_raw(
     return [serialize(r) for r in rows]
 
 
+@router.get("/ingest-log")
+async def ingest_log_recent():
+    """Last 50 Telegram updates seen since the app last started (no message text)."""
+    from app.services import ingest_log
+    return ingest_log.recent()
+
+
 @router.get("/stats")
 async def raw_stats(db: AsyncSession = Depends(get_db)):
     """What the archive currently contains, and what is stale."""

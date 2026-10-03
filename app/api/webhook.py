@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import Transaction
+from app.services import ingest_log
 from app.services.telegram import TelegramProcessor
 
 router = APIRouter(prefix="/webhook", tags=["telegram"])
@@ -38,16 +39,21 @@ async def telegram_webhook(
     except Exception:
         return {"ok": False, "error": "invalid json"}
 
-    message = update.get("message") or update.get("edited_message") or {}
+    # channel_post covers SMS forwarded into a Telegram channel rather than a group.
+    message = (update.get("message") or update.get("edited_message")
+               or update.get("channel_post") or update.get("edited_channel_post") or {})
     if not message:
+        ingest_log.record(update, "skipped: no message in update")
         return {"ok": True, "skipped": "no message"}
 
     chat_id = (message.get("chat") or {}).get("id")
     if settings.telegram_chat_id and chat_id != settings.telegram_chat_id:
+        ingest_log.record(update, "skipped: chat id not allowed", chat_id)
         return {"ok": True, "skipped": "chat id not allowed"}
 
     text = message.get("text") or message.get("caption") or ""
     if not text.strip():
+        ingest_log.record(update, "skipped: empty text (photo, file or sticker?)", chat_id)
         return {"ok": True, "skipped": "empty text"}
 
     message_id = message.get("message_id")
@@ -69,6 +75,7 @@ async def telegram_webhook(
         },
     )
 
+    ingest_log.record(update, "stored" if row is not None else "duplicate", chat_id)
     if row is None:
         # Already archived (Telegram retries on timeout).
         return {"ok": True, "duplicate": True, "raw_id": None}
