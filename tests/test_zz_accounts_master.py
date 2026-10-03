@@ -116,3 +116,21 @@ def test_ingest_log_explains_skips_and_channel_posts_are_ingested(c):
     assert log[0]["outcome"] == "stored" and "channel_post" in log[0]["update_keys"]
     assert log[1]["outcome"].startswith("skipped: no message") and log[1]["update_keys"] == ["my_chat_member"]
     assert "text" not in str(log)
+
+
+def test_direct_sms_ingest(c, monkeypatch):
+    from app.config import settings
+    sms = "AS: New SMS: Sent Rs.321.00 from Kotak Bank AC X0359 to zomato@ybl on 03-10-26.UPI Ref 998877665544. Not you?"
+    monkeypatch.setattr(settings, "telegram_webhook_secret", None)
+    assert c.post("/webhook/sms", content=sms).status_code == 503            # never open
+    monkeypatch.setattr(settings, "telegram_webhook_secret", "sec")
+    assert c.post("/webhook/sms", content=sms).status_code == 403
+    assert c.post("/webhook/sms", content=sms, headers={"X-Webhook-Secret": "bad"}).status_code == 403
+    h = {"X-Webhook-Secret": "sec", "Content-Type": "text/plain"}
+    r = c.post("/webhook/sms", content=sms, headers=h).json()
+    assert r["ok"] and r["transaction_id"], r
+    assert c.post("/webhook/sms", content=sms, headers=h).json().get("duplicate") is True   # retry
+    j = c.post("/webhook/sms", headers={"X-Webhook-Secret": "sec"},
+               json={"text": "Rs.50.00 debited via UPI to chai@ybl on 03-10-26", "prefix": "AS"}).json()
+    assert j["ok"] and "AS- " not in str(j.get("note", ""))
+    assert c.post("/webhook/sms", content="  ", headers=h).status_code == 400

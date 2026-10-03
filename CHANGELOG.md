@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased (v2-templates)
+- `POST /webhook/sms` (header `X-Webhook-Secret`): direct ingest for forwarders that post to Telegram as a bot, since Telegram never delivers bot messages to bots.
 - Messages no parser rule recognises are no longer booked as transactions. They wait on the
   new "SMS formats" page. One tap per format (Not a transaction / Debit / Credit / Own transfer,
   plus mode) is remembered in `sms_templates` and applied to every past and future message

@@ -3,7 +3,10 @@
 Expected text format: "AP- <sms>" or "AS- <sms>" (prefix = who paid).
 Message ID is used for idempotency, so a retried Telegram update is a no-op.
 """
+import hashlib
 import hmac
+import re
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from datetime import datetime
@@ -100,6 +103,64 @@ async def telegram_webhook(
         "merchant": txn.merchant,
         "note": note,
     }
+
+
+@router.post("/sms")
+async def sms_direct(
+    request: Request,
+    x_webhook_secret: Optional[str] = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Direct SMS ingest for forwarders that post as a BOT.
+
+    Telegram never delivers a bot's messages to another bot (or to itself), so a webhook
+    cannot see SMS that a forwarder app sends to the group via the Bot API. Have the
+    forwarder also POST here: header `X-Webhook-Secret: <TELEGRAM_WEBHOOK_SECRET>` and either
+    a plain-text body (the same text it sends to Telegram) or JSON
+    {"text": "...", "prefix": "AS", "time": "2026-10-03T12:36:17+05:30"}.
+    """
+    secret = settings.telegram_webhook_secret
+    if not secret:
+        raise HTTPException(status_code=503, detail="direct ingest is not configured")
+    if not hmac.compare_digest((x_webhook_secret or "").encode(), secret.encode()):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    raw = await request.body()
+    text, prefix, when = "", None, None
+    if "json" in request.headers.get("content-type", ""):
+        try:
+            data = await request.json()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid JSON")
+        text = str(data.get("text") or "")
+        prefix = (data.get("prefix") or "").strip().upper().rstrip("-: ") or None
+        if data.get("time"):
+            try:
+                when = datetime.fromisoformat(str(data["time"]))
+            except ValueError:
+                pass
+    else:
+        text = raw.decode("utf-8", errors="replace")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="empty text")
+    if prefix and not re.match(r"^\s*(AP|AS)\s*[-:]", text):
+        text = f"{prefix}- {text}"
+
+    received_at = when or datetime.now(timezone.utc)
+    # Identical text inside the same minute counts as a forwarder retry.
+    minute = received_at.strftime("%Y%m%d%H%M")
+    ext_id = int(hashlib.sha1(f"{text}|{minute}".encode()).hexdigest()[:15], 16)
+
+    processor = TelegramProcessor(db)
+    row = await processor.ingest_raw(
+        text, external_id=ext_id, source="sms_direct",
+        meta={"chat_id": None, "sender_id": None, "sender_name": None, "received_at": received_at},
+    )
+    ingest_log.record({"sms_direct": 1}, "stored" if row is not None else "duplicate")
+    if row is None:
+        return {"ok": True, "duplicate": True}
+    txn, note = await processor.derive(row)
+    return {"ok": True, "raw_id": row.id, "verdict": row.verdict, "transaction_id": txn.id if txn else None, "note": note}
 
 
 @router.get("/telegram")
