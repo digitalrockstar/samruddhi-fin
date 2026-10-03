@@ -69,3 +69,13 @@ def test_favicon_is_served_without_login():
     r = TestClient(m.app).get("/favicon.ico")
     assert r.status_code == 200 and r.headers["content-type"].startswith("image/")
     assert r.content[:4] == b"\x00\x00\x01\x00"      # ICO header
+
+
+def test_nav_has_bottom_bar_and_working_theme_button():
+    import app.main as m
+    from fastapi.testclient import TestClient
+    html = TestClient(m.app).get("/").text
+    assert "mobileOpen" not in html and 'data-lucide="menu"' not in html     # hamburger gone
+    assert html.count('class="bnav-link') == 5                               # bottom bar
+    assert 'onclick="toggleTheme()"' in html and '@click="toggleTheme()"' not in html
+    assert "viewport-fit=cover" in html
