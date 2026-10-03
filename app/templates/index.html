@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Household Expenses</h1><form method="post" action="/backfill"><button>Backfill Telegram history</button></form><form method="post" action="/ingest"><button>Pull new messages</button></form><p>Pending review: {{ pending }}. Transactions exist: {{ has_txns }}.</p>{% endblock %}
