@@ -1,21 +1,27 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-env/
+# Local reference only. Never commit.
+_legacy_v1/
 
+# Secrets and private data
 .env
+.env.*
+!.env.example
+*.session
+*.session-journal
+telegram_session*
+TG_SESSION*
+*.xml
+corpus/
+*.corpus
 *.db
 *.sqlite3
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
 .pytest_cache/
-.coverage
-htmlcov/
-
-.DS_Store
-Thumbs.db
-
-.idea/
-.vscode/
-
-secrets/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
