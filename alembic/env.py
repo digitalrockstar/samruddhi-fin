@@ -7,7 +7,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import create_engine, pool
+from sqlalchemy import inspect, text, create_engine, pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -45,7 +45,29 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def heal_reset_database(connection) -> None:
+    """Make `alembic upgrade head` work after someone emptied the database by hand.
+
+    Dropping tables in Neon leaves Postgres enum types behind (CREATE TYPE then fails with
+    "already exists") and may leave a stale alembic_version row (migrations are skipped and the
+    app starts without tables). If the app's core table is missing there is no data to protect,
+    so clear that leftover state first.
+    """
+    if connection.dialect.name != "postgresql":
+        return
+    if inspect(connection).has_table("persons"):
+        return
+    connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    names = connection.execute(text(
+        "SELECT t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace "
+        "WHERE t.typtype = 'e' AND n.nspname = current_schema()")).scalars().all()
+    for name in names:
+        connection.execute(text(f'DROP TYPE IF EXISTS "{name}" CASCADE'))
+    connection.commit()
+
+
 def do_run_migrations(connection: Connection) -> None:
+    heal_reset_database(connection)
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

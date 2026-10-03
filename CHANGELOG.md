@@ -5,6 +5,8 @@
   new "SMS formats" page. One tap per format (Not a transaction / Debit / Credit / Own transfer,
   plus mode) is remembered in `sms_templates` and applied to every past and future message
   of that format. Decisions can be undone. On the 4 exports: 369 messages, 79 formats to tap.
+- Migrations now self-heal a database emptied by hand (leftover enum types, stale alembic_version).
+  Only runs when the core `persons` table is missing, so a live database is never touched.
 - Parser version bumped so a reprocess re-evaluates old rows; manually edited rows are kept.
 
 ## 1.0.0 - 2026-10-02
