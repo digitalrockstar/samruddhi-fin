@@ -80,3 +80,28 @@ def test_reprocess_keeps_manually_edited_transactions(c):
     r = c.post("/api/raw/reprocess", json={"stale_only": False, "replace": True, "dry_run": False}).json()
     assert r["kept_manual"] >= 1
     assert c.get(f"/api/transactions/{tid}").json()["merchant"] == "MY EDIT"
+
+
+def test_formats_queue_ignore_learns_the_format(c):
+    def hook(mid, text):
+        return c.post("/webhook/telegram", json={"message": {
+            "message_id": mid, "date": 1760001000 + mid, "chat": {"id": 0},
+            "from": {"id": 1, "first_name": "t"}, "text": text}})
+
+    def total():
+        r = c.get("/api/transactions").json()
+        return r["total"] if isinstance(r, dict) else len(r)
+
+    before = total()
+    promo = "AP- Instant Cash Alert! Rs.{} is ready to be credited to your Bank A/C within 2 minutes. Tap now"
+    assert hook(777101, promo.format("50000")).status_code == 200
+    assert total() == before                                        # not booked as a credit
+    item = next(i for i in c.get("/api/formats/queue").json()["items"] if "instant cash alert" in i["example"].lower())
+    assert c.post("/api/formats/decide", json={"skeleton": item["skeleton"], "decision": "ignore"}).status_code == 200
+    assert hook(777102, promo.format("75000")).status_code == 200   # same format, new amount
+    assert total() == before
+    assert not [i for i in c.get("/api/formats/queue").json()["items"] if "instant cash alert" in i["example"].lower()]
+    # undo puts the format back in the queue
+    did = next(d["id"] for d in c.get("/api/formats/decided").json() if d["skeleton"] == item["skeleton"])
+    assert c.delete(f"/api/formats/{did}").status_code == 200
+    assert [i for i in c.get("/api/formats/queue").json()["items"] if "instant cash alert" in i["example"].lower()]

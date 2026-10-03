@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    SmsTemplate,
     Account,
     Person,
     RawMessage,
@@ -17,6 +18,7 @@ from app.models import (
 )
 from app.schemas import AllocationType, CashbackStatus, CategoryType, TransactionType
 from app.services.categorizer import Categorizer
+from app.services.templates import apply_decision, skeleton
 from app.services.parser import (
     K_CREDIT,
     K_DEBIT,
@@ -29,7 +31,7 @@ from app.services.parser import (
 
 # Bumped whenever parsing behaviour changes, so `reprocess` can tell which
 # stored messages were derived by an older version of the rules.
-PARSER_VERSION = "2026-10-01.1"
+PARSER_VERSION = "2026-10-03.1"
 
 
 def _has_clock(dt: Optional[datetime]) -> bool:
@@ -189,6 +191,12 @@ class TelegramProcessor:
     # ------------------------------------------------------------------
     # Step 2 - derive a transaction from a stored message
     # ------------------------------------------------------------------
+    async def _registry(self, parsed: ParsedSMS, body: str) -> ParsedSMS:
+        """A person's decision for this message format beats the rules."""
+        t = (await self.db.execute(
+            select(SmsTemplate).where(SmsTemplate.skeleton == skeleton(body)))).scalars().first()
+        return apply_decision(parsed, t.decision, t.mode) if t else parsed
+
     async def derive(self, row: RawMessage, replace: bool = False) -> Tuple[Optional[Transaction], str]:
         """Parse a stored message and create/link its transaction.
 
@@ -208,7 +216,7 @@ class TelegramProcessor:
                 await self.db.flush()
                 row.transaction_id = None
 
-        parsed = parse_sms(sms_text, received_at=row.received_at or datetime.now())
+        parsed = await self._registry(parse_sms(sms_text, received_at=row.received_at or datetime.now()), sms_text)
         if row.txn_date_hint and not _has_clock(parsed.txn_timestamp):
             parsed.txn_timestamp = _apply_clock(parsed.txn_timestamp, row.txn_date_hint)
 
@@ -246,7 +254,7 @@ class TelegramProcessor:
         re-parse plus the same gates, with no DB side effects at all.
         """
         sms_text = row.body or ""
-        parsed = parse_sms(sms_text, received_at=row.received_at or datetime.now())
+        parsed = await self._registry(parse_sms(sms_text, received_at=row.received_at or datetime.now()), sms_text)
         if row.txn_date_hint and not _has_clock(parsed.txn_timestamp):
             parsed.txn_timestamp = _apply_clock(parsed.txn_timestamp, row.txn_date_hint)
 

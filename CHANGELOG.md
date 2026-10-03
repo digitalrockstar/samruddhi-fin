@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased (v2-templates)
+- Messages no parser rule recognises are no longer booked as transactions. They wait on the
+  new "SMS formats" page. One tap per format (Not a transaction / Debit / Credit / Own transfer,
+  plus mode) is remembered in `sms_templates` and applied to every past and future message
+  of that format. Decisions can be undone. On the 4 exports: 369 messages, 79 formats to tap.
+- Parser version bumped so a reprocess re-evaluates old rows; manually edited rows are kept.
+
 ## 1.0.0 - 2026-10-02
 First stable release. Rule-based SMS parser, one rule per known bank format.
 

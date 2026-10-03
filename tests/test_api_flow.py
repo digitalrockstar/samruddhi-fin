@@ -180,7 +180,7 @@ def test_full_flow():
         # "AS: New SMS: ..." -> Ashka
         j(c.post("/webhook/telegram", json={
             "message": {"message_id": 401, "chat": {"id": 1},
-                        "text": "AS: New SMS: Rs.89.00 from Kotak Bank AC X0359 to "
+                        "text": "AS: New SMS: Sent Rs.89.00 from Kotak Bank AC X0359 to "
                                 "credpay.zepto@axisb on 27-07-24.UPI Ref 420088733192"},
         }))
         # "From:/Time: ..." -> Akshay, and the header supplies the clock time

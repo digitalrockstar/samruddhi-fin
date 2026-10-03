@@ -313,3 +313,13 @@ class RecurringTransaction(Base):
     __table_args__ = (
         Index("idx_recurring_next_date", "next_expected_date"),
     )
+
+class SmsTemplate(Base):
+    """A message format and what a person decided it is (ignore / debit / credit / transfer)."""
+    __tablename__ = "sms_templates"
+
+    id = Column(Integer, primary_key=True)
+    skeleton = Column(String(120), nullable=False, unique=True, index=True)
+    decision = Column(String(12), nullable=False)
+    mode = Column(String(20))
+    decided_at = Column(DateTime(timezone=True), server_default=func.now())

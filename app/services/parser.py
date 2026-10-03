@@ -29,6 +29,7 @@ from app.schemas import TransactionMode, TransactionType
 
 POSTED = "posted"
 NOT_POSTED = "not_posted"
+REVIEW = "review"              # no rule recognises this format: wait for a person
 
 K_DEBIT = "debit"          # money left an account you own
 K_CREDIT = "credit"        # money arrived
@@ -856,6 +857,8 @@ def parse_sms(text: str, received_at: Optional[datetime] = None) -> ParsedSMS:
     out.confidence = max(0.0, round(score, 2))
     if out.amount <= 0:
         out.missing.append("amount")
+    if rule.name == "generic_fallback":
+        out.verdict, out.reason, out.is_transaction = REVIEW, "unknown_format", False
     return out
 
 

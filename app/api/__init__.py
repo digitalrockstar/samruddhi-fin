@@ -4,6 +4,7 @@ from app.api import (
     accounts,
     categories,
     dashboard,
+    formats,
     mappings,
     persons,
     raw,
@@ -20,6 +21,7 @@ api_router.include_router(accounts.router)
 api_router.include_router(persons.router)
 api_router.include_router(mappings.router)
 api_router.include_router(raw.router)
+api_router.include_router(formats.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(webhook.router)
 

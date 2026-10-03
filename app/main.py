@@ -17,6 +17,7 @@ PAGES = {
     "/": ("index.html", "Dashboard"),
     "/transactions": ("transactions.html", "Transactions"),
     "/uncategorized": ("uncategorized.html", "Review"),
+    "/formats": ("formats.html", "SMS formats"),
     "/settings": ("settings.html", "Settings"),
 }
 
@@ -61,6 +62,12 @@ async def page(request: Request):
 @app.get("/transactions", response_class=HTMLResponse, include_in_schema=False)
 async def page_transactions(request: Request):
     template, title = PAGES["/transactions"]
+    return templates.TemplateResponse(template, {"request": request, "page_title": title})
+
+
+@app.get("/formats", response_class=HTMLResponse, include_in_schema=False)
+async def page_formats(request: Request):
+    template, title = PAGES["/formats"]
     return templates.TemplateResponse(template, {"request": request, "page_title": title})
 
 
