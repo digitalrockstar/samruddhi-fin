@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: samruddhi-fin
+    runtime: python
+    buildCommand: pip install -e .
+    startCommand: python scripts_migrate.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
