@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Settings & data reset{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div><div class="eyebrow">ADMINISTRATION</div><h1>Settings & data reset</h1><p class="subheading">Back up first. Reset actions are permanent and affect the shared household workspace.</p></div>
+</section>
+<div class="settings-layout data-reset-layout">
+  <section class="panel data-reset-card">
+    <div class="panel-heading"><div><h2>Full financial reset</h2><p>Clear all financial activity. Choose whether to keep your account and card setup.</p></div></div>
+    <form method="get" action="{{ url_for('settings') }}" class="stack-form">
+      <input type="hidden" name="mode" value="full">
+      <label class="check-row"><input type="checkbox" name="preserve_setup" value="1" {% if preserve_setup %}checked{% endif %}><span><strong>Preserve setup</strong><small>Keep accounts, ownership and purpose tags, credit-card profiles and limits, budgets, goals, subscriptions, and cashback rules. Clear balances/activity, statements, transactions and goal earmarks.</small></span></label>
+      <button class="button outline" type="submit">Preview full reset</button>
+    </form>
+    {% if mode == 'full' %}
+      <div class="reset-preview"><strong>Records that will be cleared</strong>
+        {% if counts %}<ul>{% for label,count in counts.items() %}<li><span>{{ label|replace('_',' ')|title }}</span><strong>{{ count }}</strong></li>{% endfor %}</ul>{% else %}<p>No matching records found.</p>{% endif %}
+      </div>
+      <a class="button outline" href="{{ url_for('download_reset_backup') }}">Download full JSON backup</a>
+      <form method="post" action="{{ url_for('perform_data_reset') }}" class="stack-form reset-confirm-form" data-confirm="This permanently clears financial data. Continue only after downloading your backup.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="full">
+        <label class="check-row"><input type="checkbox" name="preserve_setup" value="1" {% if preserve_setup %}checked{% endif %}><span>Preserve setup as described above</span></label>
+        <label class="check-row"><input type="checkbox" name="backup_confirmed" value="1" required><span>I downloaded the backup and understand this reset cannot be undone.</span></label>
+        <label class="field"><span>TYPE RESET ALL TO CONFIRM</span><input name="confirmation" autocomplete="off" required pattern="RESET ALL"></label>
+        <button class="button danger" type="submit">Reset all financial data</button>
+      </form>
+    {% endif %}
+  </section>
+  <section class="panel data-reset-card">
+    <div class="panel-heading"><div><h2>Reset activity since a date and time</h2><p>Remove financial activity created at or after a cutoff. Setup definitions and older activity remain.</p></div></div>
+    <form method="get" action="{{ url_for('settings') }}" class="stack-form">
+      <input type="hidden" name="mode" value="since">
+      <label class="field"><span>CUTOFF · INDIA STANDARD TIME</span><input type="datetime-local" name="cutoff" value="{{ cutoff_raw }}" required></label>
+      <button class="button outline" type="submit">Preview records</button>
+    </form>
+    {% if mode == 'since' and cutoff_raw %}
+      {% if error %}<p class="flash error">{{ error }}</p>{% else %}
+        <div class="reset-preview"><strong>Records that will be cleared</strong>
+          {% if counts %}<ul>{% for label,count in counts.items() %}<li><span>{{ label|replace('_',' ')|title }}</span><strong>{{ count }}</strong></li>{% endfor %}</ul>{% else %}<p>No matching records found for this cutoff.</p>{% endif %}
+        </div>
+        <p class="finance-muted">Cutoff: {{ cutoff.strftime('%d %b %Y, %I:%M %p') if cutoff else cutoff_raw }} IST. The filter uses record creation time, not the transaction's effective date.</p>
+        <a class="button outline" href="{{ url_for('download_reset_backup') }}">Download full JSON backup</a>
+        <form method="post" action="{{ url_for('perform_data_reset') }}" class="stack-form reset-confirm-form" data-confirm="This permanently removes activity created since the selected time. Continue only after downloading your backup.">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="since"><input type="hidden" name="cutoff" value="{{ cutoff_raw }}">
+          <label class="check-row"><input type="checkbox" name="backup_confirmed" value="1" required><span>I downloaded the backup and understand this reset cannot be undone.</span></label>
+          <label class="field"><span>TYPE RESET SINCE TO CONFIRM</span><input name="confirmation" autocomplete="off" required pattern="RESET SINCE"></label>
+          <button class="button danger" type="submit" {% if not counts %}disabled{% endif %}>Reset activity since cutoff</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </section>
+</div>
+<section class="panel reset-safety-note"><h2>What is always preserved?</h2><p>Member logins, password hashes, roles, and categories are retained. A full reset without “Preserve setup” also removes accounts and financial setup definitions so you can start again. Reset-since preserves setup definitions and only removes matching activity and its dependent records.</p></section>
+{% endblock %}
