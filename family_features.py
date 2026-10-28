@@ -1007,7 +1007,7 @@ def register_family_routes(app, db, models, helpers):
             meta = db.session.get(TransactionMetadata, item.id)
             if meta and meta.payer_snapshot_set:
                 payer = db.session.get(FamilyMember, meta.payer_member_id) if meta.payer_member_id else None
-                item.payer_name = payer.name if payer and payer.is_active else "Family"
+                item.payer_name = payer.name if payer else "Family"
             else:
                 item.payer_name = owner.member.name if owner and owner.member_id and owner.member else (
                     "Family" if owner is None or owner.member_id is None else "Unassigned")
