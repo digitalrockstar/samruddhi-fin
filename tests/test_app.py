@@ -336,7 +336,7 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     response = post_form(client, "/credit-cards", {
         "action": "save_statement", "account_id": str(main_card_id),
         "statement_month": statement_date.strftime("%Y-%m"), "statement_date": statement_date.isoformat(),
-        "due_date": due_date.isoformat(), "total_due": "100.00", "minimum_due": "25.00", "notes": "",
+        "due_date": due_date.isoformat(), "minimum_due": "25.00", "notes": "",
     }, token_path="/credit-cards", follow_redirects=True)
     assert response.status_code == 200
     assert b"Payment due in 2 days" in response.data
@@ -353,15 +353,15 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     }, token_path="/credit-cards", follow_redirects=True)
     assert response.status_code == 200
     assert b"statement payment recorded" in response.data
-    assert b"70.00" in response.data
+    assert b"90.00" in response.data
     assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in response.data
-    assert b"<small>Remaining</small><strong>\xe2\x82\xb970.00</strong>" in response.data
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb990.00</strong>" in response.data
     with app.app_context():
         statement = db.session.get(CreditCardStatement, statement_id)
         payment = Transaction.query.filter_by(kind="transfer", transfer_to_account_id=main_card_id).one()
         profile = CreditCardProfile.query.filter_by(account_id=second_card_id).one()
         payment_id = payment.id
-        assert statement.total_due_paise == 10000
+        assert statement.total_due_paise == 12000
         assert profile.limit_mode == "shared"
         assert payment.description.startswith("Credit card payment")
 
