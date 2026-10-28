@@ -583,6 +583,32 @@ def register_family_routes(app, db, models, helpers):
     def setup():
         return create_first_admin()
 
+    @app.route("/change-password", methods=["GET", "POST"])
+    @login_required
+    def change_password():
+        member = current_member()
+        if not member or not member.is_active:
+            session.clear()
+            return redirect(url_for("login"))
+        if request.method == "POST":
+            old_password = request.form.get("old_password", "")
+            new_password = request.form.get("new_password", "")
+            confirm_password = request.form.get("confirm_password", "")
+            if not check_password_hash(member.password_hash, old_password):
+                flash("Current password did not match.", "error")
+            elif len(new_password) < 10:
+                flash("Use a new password with at least 10 characters.", "error")
+            elif new_password != confirm_password:
+                flash("The new passwords do not match.", "error")
+            elif check_password_hash(member.password_hash, new_password):
+                flash("Choose a different password.", "error")
+            else:
+                member.password_hash = generate_password_hash(new_password)
+                db.session.commit()
+                flash("Password changed successfully.", "success")
+                return redirect(url_for("dashboard"))
+        return render_template("change_password.html", member=member)
+
     @app.get("/more")
     @login_required
     def more():
