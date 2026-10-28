@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}?v=20261028-gold-mark">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261028-interaction-system1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261028-mobile-nav2">
 </head>
 <body>
 <div class="app-shell">
@@ -52,8 +52,8 @@
     <footer class="mobile-footer">
       <a href="{{ url_for('dashboard') }}">⌂<small>Home</small></a>
       <a href="{{ url_for('transactions') }}">⇄<small>Activity</small></a>
-      <a class="mobile-add" href="{{ url_for('transaction_new') }}" aria-label="Add transaction" title="Add transaction">Add</a>
-      <a href="{{ url_for('budgets') }}">▥<small>Budgets</small></a>
+      <a class="mobile-add" href="{{ url_for('transaction_new') }}" aria-label="Add transaction" title="Add transaction">+</a>
+      <a class="{% if request.endpoint == 'accounts' %}active{% endif %}" href="{{ url_for('accounts') }}">▤<small>Accounts</small></a>
       <a href="{{ url_for('more') }}">•••<small>More</small></a>
     </footer>
   </main>
