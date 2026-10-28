@@ -78,7 +78,7 @@
     const updateKind = () => {
       const kind = form.querySelector('input[name="kind"]:checked')?.value || "expense";
       transferField.hidden = kind !== "transfer";
-      categoryField.hidden = kind === "transfer";
+      categoryField.hidden = false;
       [...categorySelect.options].forEach((option) => {
         if (!option.value) return;
         option.hidden = option.dataset.kind !== kind;
