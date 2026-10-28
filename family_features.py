@@ -455,9 +455,11 @@ def register_family_routes(app, db, models, helpers):
         output = []
         for row in rows:
             owner = owners.get(row["account"].id)
+            raw_tags = tags.get(row["account"].id, [])
             output.append({**row, "owner": owner.member if owner and owner.member_id else None,
                            "is_family_account": not owner or owner.member_id is None,
-                           "tags": tags.get(row["account"].id, [])})
+                           "tags": raw_tags,
+                           "tag_labels": [PURPOSE_TAGS.get(tag, tag.title()) for tag in raw_tags]})
         return output
 
     def enrich_categories(rows):
