@@ -74,11 +74,13 @@
   if (form) {
     const categoryField = form.querySelector(".category-field");
     const transferField = form.querySelector(".transfer-field");
+    const accountCategoryGrid = form.querySelector(".account-category-grid");
     const categorySelect = form.querySelector('select[name="category_id"]');
     const updateKind = () => {
       const kind = form.querySelector('input[name="kind"]:checked')?.value || "expense";
       transferField.hidden = kind !== "transfer";
       categoryField.hidden = false;
+      accountCategoryGrid?.classList.toggle("transfer-mode", kind === "transfer");
       [...categorySelect.options].forEach((option) => {
         if (!option.value) return;
         option.hidden = option.dataset.kind !== kind;
