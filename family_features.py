@@ -916,13 +916,46 @@ def register_family_routes(app, db, models, helpers):
         if request.method == "POST":
             action = request.form.get("action", "create")
             try:
+                if action in {"archive", "restore"}:
+                    subscription = db.session.get(Subscription, int(request.form.get("subscription_id", "")))
+                    if not subscription:
+                        raise ValueError("Subscription not found.")
+                    subscription.is_archived = action == "archive"
+                    db.session.commit()
+                    flash("Subscription archived." if subscription.is_archived else "Subscription restored.", "success")
+                    return redirect(url_for("subscriptions", archived="1" if subscription.is_archived else None))
                 if action == "update":
                     subscription = db.session.get(Subscription, int(request.form.get("subscription_id", "")))
                     if not subscription:
                         raise ValueError("Subscription not found.")
+                    subscription.name = request.form.get("name", subscription.name).strip()[:120]
                     subscription.amount_paise = money_to_paise(request.form.get("amount", ""))
                     subscription.next_date = date.fromisoformat(request.form.get("next_date", ""))
                     subscription.is_active = request.form.get("is_active") == "1"
+                    account_id = int(request.form.get("account_id", subscription.account_id))
+                    account = db.session.get(Account, account_id)
+                    if not account or not account.is_active:
+                        raise ValueError("Choose an active account.")
+                    subscription.account_id = account.id
+                    category_raw = request.form.get("category_id", "").strip()
+                    category_id = int(category_raw) if category_raw else None
+                    if category_id and (not db.session.get(Category, category_id) or db.session.get(Category, category_id).kind != "expense"):
+                        raise ValueError("Choose a valid expense category.")
+                    subscription.category_id = category_id
+                    frequency = request.form.get("frequency", subscription.frequency)
+                    interval = int(request.form.get("interval_weeks", subscription.interval_weeks) or subscription.interval_weeks)
+                    if frequency not in {"weekly", "monthly", "annual", "every_n_weeks"} or (frequency == "every_n_weeks" and not 1 <= interval <= 52):
+                        raise ValueError("Choose a valid frequency and interval.")
+                    subscription.frequency, subscription.interval_weeks = frequency, interval
+                    subscription.notes = request.form.get("notes", subscription.notes).strip()[:500]
+                    budget_selection = request.form.get("budget_selection", "family")
+                    budget = None
+                    if budget_selection.startswith("budget:"):
+                        budget = db.session.get(Budget, int(budget_selection.split(":", 1)[1]))
+                        if not budget or not budget.is_active:
+                            raise ValueError("Choose an active budget.")
+                    subscription.budget_id = budget.id if budget else None
+                    subscription.budget_scope = budget.owner_type if budget else "family"
                     db.session.commit()
                     flash("Subscription updated. Only future occurrences use the new amount; historical transactions are unchanged.", "success")
                     return redirect(url_for("subscriptions"))
@@ -963,15 +996,16 @@ def register_family_routes(app, db, models, helpers):
                 db.session.rollback()
                 flash(str(exc) or "Check subscription details.", "error")
                 return redirect(url_for("subscriptions"))
-        rows = Subscription.query.order_by(Subscription.is_active.desc(), Subscription.next_date, Subscription.name).all()
+        show_archived = request.args.get("archived") == "1"
+        rows = Subscription.query.filter_by(is_archived=show_archived).order_by(Subscription.is_active.desc(), Subscription.next_date, Subscription.name).all()
         options = []
         for budget in Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all():
             owner = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             options.append({"value": f"budget:{budget.id}", "label": f"{owner}: {budget.name}"})
         return render_template("subscriptions.html", subscriptions=rows,
-            accounts=Account.query.order_by(Account.name).all(),
+            accounts=Account.query.filter_by(is_active=True).order_by(Account.name).all(),
             categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
-            budget_options=options, today=date.today().isoformat())
+            budget_options=options, today=date.today().isoformat(), show_archived=show_archived)
 
     @app.route("/cashback-schemes", methods=["GET", "POST"])
     @login_required
