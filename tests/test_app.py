@@ -766,3 +766,67 @@ def test_data_reset_rejects_missing_confirmation_without_mutation(client, app):
     assert b"confirmation phrase did not match" in response.data
     with app.app_context():
         assert db.session.get(Transaction, txn_id) is not None
+
+
+def test_goal_creation_form_includes_csrf_and_creates_goal(client, app):
+    page = client.get("/goals")
+    assert page.status_code == 200
+    match = re.search(
+        rb'<h2>Create goal</h2>.*?<form method="post" class="stack-form finance-form"><input type="hidden" name="_csrf_token" value="([^"]+)"',
+        page.data, re.S)
+    assert match, "goal creation form must include a CSRF token"
+    response = client.post("/goals", data={
+        "_csrf_token": match.group(1).decode(),
+        "name": "Emergency fund goal",
+        "owner_type": "family",
+        "member_id": "",
+        "target_amount": "50000",
+        "target_date": "",
+        "monthly_contribution": "",
+        "contribution_source_account_id": "",
+        "contribution_destination_account_id": "",
+        "next_contribution_date": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Goal created." in response.data
+    with app.app_context():
+        goal = Goal.query.filter_by(name="Emergency fund goal").one()
+        assert goal.target_paise == 5_000_000
+        assert goal.owner_type == "family"
+
+
+def test_credit_card_statement_total_comes_from_transactions(client, app):
+    with app.app_context():
+        card = Account(name="Test credit card", account_type="credit", opening_balance_paise=0, colour="#7297d2")
+        bank = Account.query.filter_by(name="Main bank").one()
+        db.session.add(card)
+        db.session.flush()
+        card_id, bank_id = card.id, bank.id
+        db.session.add(Transaction(
+            transaction_date=date(2026, 10, 5), kind="expense", amount_paise=150_000,
+            description="Card purchase", account_id=card_id))
+        db.session.add(Transaction(
+            transaction_date=date(2026, 10, 10), kind="transfer", amount_paise=50_000,
+            description="Card payment", account_id=bank_id, transfer_to_account_id=card_id))
+        # This later purchase must not change the statement-date snapshot.
+        db.session.add(Transaction(
+            transaction_date=date(2026, 10, 25), kind="expense", amount_paise=30_000,
+            description="After statement purchase", account_id=card_id))
+        db.session.commit()
+
+    response = post_form(client, "/credit-cards", {
+        "action": "save_statement",
+        "account_id": str(card_id),
+        "statement_month": "2026-10",
+        "statement_date": "2026-10-20",
+        "due_date": "2026-11-10",
+        "minimum_due": "100",
+        "notes": "test statement",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Statement saved for Test credit card" in response.data
+    with app.app_context():
+        statement = CreditCardStatement.query.filter_by(
+            account_id=card_id, statement_month="2026-10").one()
+        assert statement.total_due_paise == 100_000
+        assert statement.minimum_due_paise == 10_000
