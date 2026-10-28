@@ -79,7 +79,10 @@ def register_family_routes(app, db, models, helpers):
         month_index = day.year * 12 + (day.month - 1) + 1
         year, month_zero = divmod(month_index, 12)
         month = month_zero + 1
-        return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
+        target_last_day = calendar.monthrange(year, month)[1]
+        source_is_month_end = day.day == calendar.monthrange(day.year, day.month)[1]
+        target_day = target_last_day if source_is_month_end else min(day.day, target_last_day)
+        return date(year, month, target_day)
 
     def matching_scheme(account_id, description):
         needle = (description or "").casefold()
@@ -341,7 +344,8 @@ def register_family_routes(app, db, models, helpers):
         current_beneficiary_rows = TransactionBeneficiary.query.filter_by(transaction_id=item.id).all() if item else []
         selected_beneficiaries = {row.member_id: row for row in current_beneficiary_rows}
         budget_options = []
-        for budget in Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all():
+        all_budgets = Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all()
+        for budget in all_budgets:
             owner = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             category_label = f" · {budget.category.name}" if budget.category else ""
             budget_options.append({
@@ -352,6 +356,11 @@ def register_family_routes(app, db, models, helpers):
         selected_budget_value = "family"
         if current_meta and current_meta.budget_id:
             selected_budget_value = f"budget:{current_meta.budget_id}"
+        elif not item:
+            default_family_budget = next((budget for budget in all_budgets
+                if budget.owner_type == "family" and budget.category_id is None and budget.period_type == "monthly"), None)
+            if default_family_budget:
+                selected_budget_value = f"budget:{default_family_budget.id}"
         cashback_schemes = CashbackScheme.query.filter_by(is_active=True).order_by(CashbackScheme.name).all()
         item_account_id = item.account_id if item else None
         item_description = item.description if item else ""
@@ -609,7 +618,7 @@ def register_family_routes(app, db, models, helpers):
                     member_id = None
                 period_start = start_date.replace(month=1, day=1) if period_type == "annual" else start_date.replace(day=1)
                 budget = Budget(name=name, owner_type=owner_type, member_id=member_id, category_id=category_id,
-                    period_type=period_type, amount_paise=amount, spread_monthly=request.form.get("spread_monthly") == "1",
+                    period_type=period_type, amount_paise=amount, spread_monthly=(request.form.get("spread_monthly") == "1" and period_type == "annual"),
                     start_date=period_start)
                 db.session.add(budget)
                 db.session.commit()
@@ -621,7 +630,7 @@ def register_family_routes(app, db, models, helpers):
             row["owner_label"] = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             budget_rows.append(row)
         return render_template("budgets.html", budget_rows=budget_rows, people=active_members(),
-            categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(),
+            categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
             today=date.today(), month_start=date.today().replace(day=1).isoformat())
 
     @app.post("/budgets/<int:budget_id>/toggle")
@@ -773,7 +782,7 @@ def register_family_routes(app, db, models, helpers):
             options.append({"value": f"budget:{budget.id}", "label": f"{owner}: {budget.name}"})
         return render_template("subscriptions.html", subscriptions=rows,
             accounts=Account.query.order_by(Account.name).all(),
-            categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(),
+            categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
             budget_options=options, today=date.today().isoformat())
 
     @app.route("/cashback-schemes", methods=["GET", "POST"])
@@ -844,6 +853,9 @@ def register_family_routes(app, db, models, helpers):
                 return redirect(url_for("approvals"))
             if event.status == "approved" or event.posted_transaction_id:
                 flash("This cashback has already been posted.", "error")
+                return redirect(url_for("approvals"))
+            if event.status not in {"pending_approval", "not_received"}:
+                flash("This cashback is not awaiting approval.", "error")
                 return redirect(url_for("approvals"))
             if event.expected_date > date.today():
                 flash("This cashback is not due for approval yet.", "error")
