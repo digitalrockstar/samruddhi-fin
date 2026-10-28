@@ -249,3 +249,11 @@
 @media(orientation:portrait) and (max-width:900px){
   .summary-grid,.finance-card-grid,.account-cards,.cc-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Make the selected theme obvious and keep the picker clickable above nearby UI. */
+.theme-picker{position:relative;z-index:30}
+.theme-dot{position:relative;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,outline-color .16s ease}
+.theme-dot.is-selected{outline:2px solid var(--accent-strong);outline-offset:3px;box-shadow:0 0 0 5px var(--accent-soft)}
+.theme-dot:active{transform:scale(.92)}
+.theme-dot[aria-pressed="true"]::after{content:"";position:absolute;inset:5px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(30,45,35,.25)}
