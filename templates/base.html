@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261028-grid-themefix2">
 </head>
 <body>
 <div class="app-shell">
@@ -63,6 +63,32 @@
     </footer>
   </main>
 </div>
-<script src="{{ url_for('static', filename='app.js') }}?v=20261028-themefix1" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261028-grid-themefix2" defer></script>
+
+<script>
+(() => {
+  const themes = ["mint", "blue", "violet", "peach"];
+  const apply = (theme) => {
+    if (!themes.includes(theme)) return;
+    document.documentElement.setAttribute("data-theme", theme);
+    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+      const active = button.dataset.themeChoice === theme;
+      button.classList.toggle("is-selected", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    try { localStorage.setItem("samruddhi-theme", theme); } catch (e) {}
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = ({mint:"#f4f7f2",blue:"#f3f6fb",violet:"#f7f4fb",peach:"#fbf5ef"})[theme];
+  };
+  let saved = "mint";
+  try { saved = localStorage.getItem("samruddhi-theme") || "mint"; } catch (e) {}
+  apply(saved);
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-theme-choice]");
+    if (button) apply(button.dataset.themeChoice);
+  });
+})();
+</script>
+
 </body>
 </html>
