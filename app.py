@@ -127,7 +127,7 @@ def make_login_required():
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if os.environ.get("APP_PASSWORD") and not session.get("authenticated"):
+            if current_password() and not session.get("authenticated"):
                 return redirect(url_for("login", next=request.path))
             return view(*args, **kwargs)
         return wrapped
