@@ -130,12 +130,14 @@ public class MainActivity extends Activity {
             if ("http".equals(scheme) || "https".equals(scheme)
                     || "mailto".equals(scheme) || "tel".equals(scheme)
                     || "sms".equals(scheme) || "geo".equals(scheme)) {
+                if (popup && popupDialog != null) popupDialog.dismiss();
                 openExternal(uri);
                 return true;
             }
             if ("about".equals(scheme) || "blob".equals(scheme) || "data".equals(scheme)) {
                 return false;
             }
+            if (popup && popupDialog != null) popupDialog.dismiss();
             openExternal(uri);
             return true;
         }
