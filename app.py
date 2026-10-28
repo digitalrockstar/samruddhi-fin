@@ -1071,6 +1071,190 @@ def create_app(test_config: dict | None = None) -> Flask:
                    if row.id not in subcategory_ids]
         return render_template("categories.html", categories=rows, parents=parents)
 
+
+    def require_primary_admin():
+        member = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+        if app.config.get("TESTING") and not app.config.get("TEST_AUTH_REQUIRED"):
+            return member
+        if not member:
+            abort(403)
+        if member.username != "akshayp" or member.role != "admin":
+            abort(403)
+        return member
+
+    def reset_cutoff(raw):
+        if not raw:
+            raise ValueError("Choose a date and time.")
+        try:
+            local_value = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise ValueError("Enter a valid date and time.") from exc
+        if local_value.tzinfo is None:
+            local_value = local_value.replace(tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        return local_value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def backup_payload():
+        backup_models = [
+            Account, Category, Transaction, ImportBatch, CreditLimitGroup, CreditCardProfile,
+            CreditCardStatement, StatementPayment, FamilyMember, AccountOwner, AccountPurposeTag,
+            CategoryParent, Budget, Goal, GoalEarmark, TransactionMetadata, TransactionBeneficiary,
+            CashbackScheme, Subscription, SubscriptionOccurrence, CashbackEvent,
+        ]
+        payload = {"app": "Samruddhi Finance", "format_version": 1,
+                   "created_at_utc": utcnow_naive().isoformat() + "Z", "tables": {}}
+        for model in backup_models:
+            rows = []
+            for row in model.query.order_by(model.__table__.primary_key.columns.values()[0]).all():
+                item = {}
+                for column in model.__table__.columns:
+                    if column.name == "password_hash":
+                        continue
+                    value = getattr(row, column.name)
+                    item[column.name] = value.isoformat() if isinstance(value, (date, datetime)) else value
+                rows.append(item)
+            payload["tables"][model.__tablename__] = rows
+        return payload
+
+    def reset_preview_counts(mode, cutoff=None, preserve_setup=False):
+        counts = {}
+        if mode == "full":
+            models_to_clear = [StatementPayment, SubscriptionOccurrence, TransactionBeneficiary,
+                TransactionMetadata, GoalEarmark, CashbackEvent, Transaction, CreditCardStatement, ImportBatch]
+            if not preserve_setup:
+                models_to_clear += [Subscription, Goal, Budget, CashbackScheme, CreditCardProfile,
+                    CreditLimitGroup, AccountOwner, AccountPurposeTag, Account]
+            for model in models_to_clear:
+                counts[model.__tablename__] = model.query.count()
+        else:
+            txn_ids = [value for (value,) in db.session.query(Transaction.id).filter(Transaction.created_at >= cutoff).all()]
+            counts["transactions"] = len(txn_ids)
+            counts["transaction details"] = TransactionMetadata.query.filter(TransactionMetadata.transaction_id.in_(txn_ids)).count() if txn_ids else 0
+            counts["beneficiary splits"] = TransactionBeneficiary.query.filter(TransactionBeneficiary.transaction_id.in_(txn_ids)).count() if txn_ids else 0
+            counts["subscription occurrences"] = SubscriptionOccurrence.query.filter(
+                or_(SubscriptionOccurrence.transaction_id.in_(txn_ids), SubscriptionOccurrence.subscription_id.in_(
+                    db.session.query(Subscription.id).filter(Subscription.created_from_transaction_id.in_(txn_ids))))
+            ).count() if txn_ids else 0
+            counts["cashback events"] = CashbackEvent.query.filter(or_(
+                CashbackEvent.created_at >= cutoff,
+                CashbackEvent.transaction_id.in_(txn_ids),
+                CashbackEvent.posted_transaction_id.in_(txn_ids))).count() if txn_ids else CashbackEvent.query.filter(CashbackEvent.created_at >= cutoff).count()
+            counts["credit-card statements"] = CreditCardStatement.query.filter(CreditCardStatement.created_at >= cutoff).count()
+            statement_ids = db.session.query(CreditCardStatement.id).filter(CreditCardStatement.created_at >= cutoff)
+            counts["statement payments"] = StatementPayment.query.filter(or_(
+                StatementPayment.created_at >= cutoff,
+                StatementPayment.statement_id.in_(statement_ids),
+                StatementPayment.transaction_id.in_(txn_ids) if txn_ids else text("1=0"))).count()
+            counts["goal earmarks"] = GoalEarmark.query.filter(GoalEarmark.updated_at >= cutoff).count()
+            counts["CSV import batches"] = ImportBatch.query.filter(ImportBatch.created_at >= cutoff).count()
+        return {key: value for key, value in counts.items() if value}
+
+    @app.get("/settings")
+    @login_required
+    def settings():
+        require_primary_admin()
+        mode = request.args.get("mode", "full")
+        if mode not in {"full", "since"}:
+            mode = "full"
+        cutoff_raw = request.args.get("cutoff", "")
+        cutoff = None
+        error = None
+        counts = {}
+        if mode == "since" and cutoff_raw:
+            try:
+                cutoff = reset_cutoff(cutoff_raw)
+                counts = reset_preview_counts(mode, cutoff=cutoff)
+            except ValueError as exc:
+                error = str(exc)
+        elif mode == "full":
+            counts = reset_preview_counts("full", preserve_setup=request.args.get("preserve_setup") == "1")
+        return render_template("settings.html", mode=mode, cutoff_raw=cutoff_raw,
+            cutoff=cutoff, counts=counts, error=error,
+            preserve_setup=request.args.get("preserve_setup") == "1")
+
+    @app.get("/settings/data-reset/backup")
+    @login_required
+    def download_reset_backup():
+        require_primary_admin()
+        payload = backup_payload()
+        content = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+        filename = "samruddhi-backup-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".json"
+        return Response(content, mimetype="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+    @app.post("/settings/data-reset")
+    @login_required
+    def perform_data_reset():
+        require_primary_admin()
+        mode = request.form.get("mode", "full")
+        preserve_setup = request.form.get("preserve_setup") == "1"
+        cutoff_raw = request.form.get("cutoff", "").strip()
+        if mode not in {"full", "since"}:
+            abort(400)
+        if request.form.get("backup_confirmed") != "1":
+            flash("Download a backup and confirm before resetting data.", "error")
+            return redirect(url_for("settings", mode=mode, cutoff=cutoff_raw, preserve_setup="1" if preserve_setup else "0"))
+        if request.form.get("confirmation", "").strip() != ("RESET ALL" if mode == "full" else "RESET SINCE"):
+            flash("The confirmation phrase did not match. No data was changed.", "error")
+            return redirect(url_for("settings", mode=mode, cutoff=cutoff_raw, preserve_setup="1" if preserve_setup else "0"))
+        try:
+            cutoff = reset_cutoff(cutoff_raw) if mode == "since" else None
+            if mode == "since" and not reset_preview_counts("since", cutoff=cutoff):
+                flash("No records match that cutoff. Nothing was changed.", "info")
+                return redirect(url_for("settings", mode="since", cutoff=cutoff_raw))
+            if mode == "full":
+                # Delete dependent activity before parent records to preserve FK integrity.
+                StatementPayment.query.delete(synchronize_session=False)
+                SubscriptionOccurrence.query.delete(synchronize_session=False)
+                TransactionBeneficiary.query.delete(synchronize_session=False)
+                TransactionMetadata.query.delete(synchronize_session=False)
+                GoalEarmark.query.delete(synchronize_session=False)
+                CashbackEvent.query.delete(synchronize_session=False)
+                Transaction.query.delete(synchronize_session=False)
+                CreditCardStatement.query.delete(synchronize_session=False)
+                ImportBatch.query.delete(synchronize_session=False)
+                if not preserve_setup:
+                    Subscription.query.delete(synchronize_session=False)
+                    Goal.query.delete(synchronize_session=False)
+                    Budget.query.delete(synchronize_session=False)
+                    CashbackScheme.query.delete(synchronize_session=False)
+                    CreditCardProfile.query.delete(synchronize_session=False)
+                    CreditLimitGroup.query.delete(synchronize_session=False)
+                    AccountOwner.query.delete(synchronize_session=False)
+                    AccountPurposeTag.query.delete(synchronize_session=False)
+                    Account.query.delete(synchronize_session=False)
+                db.session.commit()
+                flash("Full financial reset completed. Member logins and categories were preserved.", "success")
+            else:
+                txn_ids = [value for (value,) in db.session.query(Transaction.id).filter(Transaction.created_at >= cutoff).all()]
+                statement_ids = [value for (value,) in db.session.query(CreditCardStatement.id).filter(CreditCardStatement.created_at >= cutoff).all()]
+                related_event_query = CashbackEvent.query.filter(or_(
+                    CashbackEvent.created_at >= cutoff,
+                    CashbackEvent.transaction_id.in_(txn_ids) if txn_ids else text("1=0"),
+                    CashbackEvent.posted_transaction_id.in_(txn_ids) if txn_ids else text("1=0")))
+                related_event_ids = [value for (value,) in related_event_query.with_entities(CashbackEvent.id).all()]
+                if txn_ids:
+                    SubscriptionOccurrence.query.filter(SubscriptionOccurrence.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
+                    TransactionMetadata.query.filter(TransactionMetadata.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
+                    TransactionBeneficiary.query.filter(TransactionBeneficiary.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
+                    StatementPayment.query.filter(StatementPayment.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
+                if related_event_ids:
+                    CashbackEvent.query.filter(CashbackEvent.id.in_(related_event_ids)).delete(synchronize_session=False)
+                if statement_ids:
+                    StatementPayment.query.filter(StatementPayment.statement_id.in_(statement_ids)).delete(synchronize_session=False)
+                    CreditCardStatement.query.filter(CreditCardStatement.id.in_(statement_ids)).delete(synchronize_session=False)
+                GoalEarmark.query.filter(GoalEarmark.updated_at >= cutoff).delete(synchronize_session=False)
+                ImportBatch.query.filter(ImportBatch.created_at >= cutoff).delete(synchronize_session=False)
+                if txn_ids:
+                    # If an older cashback event referenced a deleted posted transaction, it was removed above.
+                    Transaction.query.filter(Transaction.id.in_(txn_ids)).delete(synchronize_session=False)
+                db.session.commit()
+                flash("Financial activity created since the selected IST time was reset. Accounts and setup definitions were preserved.", "success")
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Data reset failed")
+            flash("Reset failed and the database changes were rolled back. No reset was completed.", "error")
+        return redirect(url_for("settings"))
+
     @app.get("/export.csv")
     @login_required
     def export_csv():
