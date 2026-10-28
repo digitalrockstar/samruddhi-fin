@@ -8,6 +8,12 @@
   <article class="summary-card"><div class="card-top"><span class="card-label">Money out</span><span class="metric-icon expense-icon">↗</span></div><div class="metric-value">{{ money(expenses) }}</div><div class="metric-foot"><span class="status-pill neutral">Expenses</span><span>Transfers excluded</span></div></article>
   <article class="summary-card net-card"><div class="card-top"><span class="card-label">Net cash flow</span><span class="metric-icon net-icon">⌁</span></div><div class="metric-value {% if net < 0 %}negative{% endif %}">{{ money(net) }}</div><div class="metric-foot"><span class="status-pill {% if net >= 0 %}positive{% else %}warning{% endif %}">{% if net >= 0 %}Positive{% else %}Negative{% endif %} cash flow</span><span>Income − expenses</span></div></article>
 </section>
+{% if card_reminders %}
+<section class="panel cc-reminder-panel">
+  <div class="panel-heading"><div><h2>Credit card reminders</h2><p>Unpaid statements needing attention</p></div><a class="text-link" href="{{ url_for('credit_cards') }}">Manage cards ↗</a></div>
+  <div class="cc-reminder-list">{% for row in card_reminders[:4] %}<a class="cc-reminder-row" href="{{ url_for('credit_cards') }}"><span class="cc-reminder-icon {% if row.status == 'Overdue' %}danger{% elif row.status == 'Due today' %}warning{% endif %}">!</span><span class="cc-reminder-copy"><strong>{{ row.card.name }}</strong><small>{{ row.reminder_label }} · {{ row.statement.statement_month }} statement</small></span><strong class="cc-reminder-amount">{{ money(row.remaining_paise) }}</strong></a>{% endfor %}</div>
+</section>
+{% endif %}
 <section class="content-grid">
   <article class="panel breakdown-panel"><div class="panel-heading"><div><h2>Where it goes</h2><p>Expense breakdown by category</p></div><a class="text-link" href="{{ url_for('transactions',month=month,kind='expense') }}">Details ↗</a></div>
   {% if breakdown %}<div class="breakdown-list">{% for row in breakdown %}<div class="breakdown-row"><div class="breakdown-name"><span class="category-swatch" style="--swatch:{{ row.colour }}"></span><span>{{ row.name }}</span></div><div class="breakdown-track"><span style="width:{{ row.share }}%;--swatch:{{ row.colour }}"></span></div><strong>{{ money(row.amount) }}</strong></div>{% endfor %}</div>
