@@ -65,6 +65,7 @@ class Transaction(db.Model):
     account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
     category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=True)
     transfer_to_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True, index=True)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False, index=True)
     notes = db.Column(db.String(500), nullable=False, default="")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
 
@@ -216,17 +217,17 @@ def create_app(test_config: dict | None = None) -> Flask:
     def dashboard():
         start, end, month = month_bounds(request.args.get("month"))
         income = db.session.query(func.coalesce(func.sum(Transaction.amount_paise), 0)).filter(
-            Transaction.kind == "income", Transaction.transaction_date >= start,
+            Transaction.kind == "income", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).scalar()
         expenses = db.session.query(func.coalesce(func.sum(Transaction.amount_paise), 0)).filter(
-            Transaction.kind == "expense", Transaction.transaction_date >= start,
+            Transaction.kind == "expense", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).scalar()
-        recent = Transaction.query.filter(Transaction.transaction_date >= start,
+        recent = Transaction.query.filter(Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).order_by(
             Transaction.transaction_date.desc(), Transaction.id.desc()).limit(7).all()
         category_rows = db.session.query(Category.name, Category.colour,
             func.sum(Transaction.amount_paise)).join(Transaction, Transaction.category_id == Category.id).filter(
-            Transaction.kind == "expense", Transaction.transaction_date >= start,
+            Transaction.kind == "expense", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).group_by(Category.id).order_by(
             func.sum(Transaction.amount_paise).desc()).limit(6).all()
         expense_total = int(expenses or 0)
@@ -242,7 +243,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def transactions():
         start, end, month = month_bounds(request.args.get("month"))
-        query = Transaction.query.filter(Transaction.transaction_date >= start, Transaction.transaction_date < end)
+        show_archived = request.args.get("archived") == "1"
+        query = Transaction.query.filter(Transaction.is_archived.is_(show_archived), Transaction.transaction_date >= start, Transaction.transaction_date < end)
         kind = request.args.get("kind", "")
         search = request.args.get("q", "").strip()[:100]
         if kind in KINDS:
@@ -251,7 +253,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             pattern = f"%{search}%"
             query = query.filter(or_(Transaction.description.ilike(pattern), Transaction.notes.ilike(pattern)))
         items = query.order_by(Transaction.transaction_date.desc(), Transaction.id.desc()).all()
-        return render_template("transactions.html", items=items, month=month, kind=kind, q=search)
+        return render_template("transactions.html", items=items, month=month, kind=kind, q=search, archived=show_archived)
 
     def save_transaction(item: Transaction | None):
         accounts = Account.query.order_by(Account.name).all()
@@ -313,26 +315,41 @@ def create_app(test_config: dict | None = None) -> Flask:
     def transaction_edit(transaction_id: int):
         return save_transaction(db.get_or_404(Transaction, transaction_id))
 
-    @app.post("/transactions/<int:transaction_id>/delete")
+    @app.post("/transactions/<int:transaction_id>/archive")
     @login_required
-    def transaction_delete(transaction_id: int):
+    def transaction_archive(transaction_id: int):
         item = db.get_or_404(Transaction, transaction_id)
-        db.session.delete(item)
+        item.is_archived = True
         db.session.commit()
-        flash("Transaction deleted.", "success")
+        flash("Transaction archived. You can restore it from Archived transactions.", "success")
         return redirect(url_for("transactions"))
+
+    @app.post("/transactions/<int:transaction_id>/restore")
+    @login_required
+    def transaction_restore(transaction_id: int):
+        item = db.get_or_404(Transaction, transaction_id)
+        item.is_archived = False
+        db.session.commit()
+        flash("Transaction restored.", "success")
+        return redirect(url_for("transactions", archived="1"))
 
     def balances_for_accounts(accounts: list[Account]) -> list[dict[str, Any]]:
         output = []
         for account in accounts:
-            txns = Transaction.query.filter(or_(Transaction.account_id == account.id,
+            txns = Transaction.query.filter(Transaction.is_archived.is_(False), or_(Transaction.account_id == account.id,
                 Transaction.transfer_to_account_id == account.id)).all()
             balance = account.opening_balance_paise
             for txn in txns:
                 if txn.kind == "transfer":
-                    balance += txn.amount_paise if txn.transfer_to_account_id == account.id else -txn.amount_paise
+                    if account.account_type == "credit":
+                        balance += -txn.amount_paise if txn.transfer_to_account_id == account.id else txn.amount_paise
+                    else:
+                        balance += txn.amount_paise if txn.transfer_to_account_id == account.id else -txn.amount_paise
                 elif txn.account_id == account.id:
-                    balance += txn.amount_paise if txn.kind == "income" else -txn.amount_paise
+                    if account.account_type == "credit":
+                        balance += txn.amount_paise if txn.kind == "expense" else -txn.amount_paise
+                    else:
+                        balance += txn.amount_paise if txn.kind == "income" else -txn.amount_paise
             output.append({"account": account, "balance": balance, "count": len(txns)})
         return output
 
@@ -389,7 +406,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         output = io.StringIO(newline="")
         writer = csv.writer(output)
         writer.writerow(["date", "type", "amount", "description", "account", "category", "transfer_to", "notes"])
-        for txn in Transaction.query.order_by(Transaction.transaction_date, Transaction.id).all():
+        for txn in Transaction.query.filter(Transaction.is_archived.is_(False)).order_by(Transaction.transaction_date, Transaction.id).all():
             writer.writerow([txn.transaction_date.isoformat(), txn.kind,
                 f"{txn.amount_paise // 100}.{txn.amount_paise % 100:02d}", txn.description,
                 txn.account.name, txn.category.name if txn.category else "",
