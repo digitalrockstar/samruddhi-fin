@@ -767,6 +767,28 @@ def register_family_routes(app, db, models, helpers):
     @app.route("/goals", methods=["GET", "POST"])
     @login_required
     def goals():
+        if request.method == "POST" and request.form.get("action") == "update":
+            try:
+                goal = db.session.get(Goal, int(request.form.get("goal_id", ""))) or abort(404)
+                name = request.form.get("name", "").strip()[:120]
+                owner_type = request.form.get("owner_type", "family")
+                member_id = int(request.form.get("member_id")) if request.form.get("member_id", "").strip() else None
+                target = money_to_paise(request.form.get("target_amount", ""))
+                target_date = date.fromisoformat(request.form.get("target_date", "")) if request.form.get("target_date", "").strip() else None
+                if not name or owner_type not in {"family", "individual"}:
+                    raise ValueError("Enter a goal name and valid owner type.")
+                if owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
+                    raise ValueError("Choose an active member for an individual goal.")
+                goal.name, goal.owner_type = name, owner_type
+                goal.member_id = member_id if owner_type == "individual" else None
+                goal.target_paise, goal.target_date = target, target_date
+                db.session.commit()
+                flash("Goal updated.", "success")
+                return redirect(url_for("goals"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Check the goal details.", "error")
+                return redirect(url_for("goals"))
         if request.method == "POST":
             action = request.form.get("action", "create")
             if action == "earmark":
@@ -824,14 +846,15 @@ def register_family_routes(app, db, models, helpers):
                     flash("Goal created.", "success")
                     return redirect(url_for("goals"))
         goal_rows = []
-        for goal in Goal.query.filter_by(is_active=True).order_by(Goal.target_date.is_(None), Goal.target_date, Goal.name).all():
+        show_archived = request.args.get("archived") == "1"
+        for goal in Goal.query.filter_by(is_active=not show_archived).order_by(Goal.target_date.is_(None), Goal.target_date, Goal.name).all():
             earmarks = GoalEarmark.query.filter_by(goal_id=goal.id).all()
             saved = sum(row.amount_paise for row in earmarks)
             goal_rows.append({"goal": goal, "saved": saved, "remaining": max(goal.target_paise - saved, 0),
                 "progress": min(100, round(saved * 100 / goal.target_paise)) if goal.target_paise else 0,
                 "earmarks": earmarks, "owner_label": "Family" if goal.owner_type == "family" else (goal.member.name if goal.member else "Individual")})
         return render_template("goals.html", goal_rows=goal_rows, people=active_members(),
-                               accounts=Account.query.filter(Account.account_type != "credit").order_by(Account.name).all())
+                               accounts=Account.query.filter(Account.account_type != "credit", Account.is_active.is_(True)).order_by(Account.name).all(), show_archived=show_archived)
 
     @app.post("/goals/<int:goal_id>/toggle")
     @login_required
