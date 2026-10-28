@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" data-theme="mint">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f7f2">
+  <title>{% block title %}Overview{% endblock %} · Samruddhi Finance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('dashboard') }}"><span class="brand-mark">s<span>.</span></span><span><strong>samruddhi</strong><small>PERSONAL FINANCE</small></span></a>
+    <div class="side-label">YOUR MONEY</div>
+    <nav class="nav-list">
+      <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span class="nav-icon">⌂</span><span>Overview</span></a>
+      <a class="nav-link {% if request.endpoint in ['transactions','transaction_new','transaction_edit'] %}active{% endif %}" href="{{ url_for('transactions') }}"><span class="nav-icon">⇄</span><span>Transactions</span></a>
+      <a class="nav-link {% if request.endpoint == 'accounts' %}active{% endif %}" href="{{ url_for('accounts') }}"><span class="nav-icon">▤</span><span>Accounts</span></a>
+      <a class="nav-link {% if request.endpoint == 'categories' %}active{% endif %}" href="{{ url_for('categories') }}"><span class="nav-icon">◈</span><span>Categories</span></a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="privacy-note"><span class="privacy-dot"></span><span><strong>Your money, your view</strong><small>Private by design</small></span></div>
+      {% if auth_enabled %}<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="quiet-button" type="submit">Sign out ↗</button></form>{% endif %}
+      <div class="sidebar-foot">SAMRUDDHI FINANCE <span>·</span> V1</div>
+    </div>
+  </aside>
+  <main class="main-area">
+    <header class="topbar">
+      <a class="mobile-brand" href="{{ url_for('dashboard') }}"><span class="brand-mark">s<span>.</span></span><strong>samruddhi</strong></a>
+      <div class="topbar-spacer"></div>
+      <div class="theme-picker" aria-label="Choose colour theme">
+        <button type="button" class="theme-dot mint" data-theme-choice="mint" aria-label="Mint theme"></button>
+        <button type="button" class="theme-dot blue" data-theme-choice="blue" aria-label="Blue theme"></button>
+        <button type="button" class="theme-dot violet" data-theme-choice="violet" aria-label="Violet theme"></button>
+        <button type="button" class="theme-dot peach" data-theme-choice="peach" aria-label="Peach theme"></button>
+      </div>
+      <a class="avatar" href="{{ url_for('categories') }}" aria-label="Categories and settings">S</a>
+    </header>
+    <div class="page-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}<div class="flash-stack" role="status">{% for category,message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+    <footer class="mobile-footer">
+      <a href="{{ url_for('dashboard') }}">⌂<small>Home</small></a>
+      <a href="{{ url_for('transactions') }}">⇄<small>Activity</small></a>
+      <a class="mobile-add" href="{{ url_for('transaction_new') }}" aria-label="Add transaction">＋</a>
+      <a href="{{ url_for('accounts') }}">▤<small>Accounts</small></a>
+      <a href="{{ url_for('categories') }}">◈<small>Categories</small></a>
+    </footer>
+  </main>
+</div>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>
