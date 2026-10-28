@@ -70,6 +70,65 @@
     details.classList.add("inline-edit-modal");
   });
 
+
+  document.querySelectorAll("[data-open-dialog]").forEach((trigger) => trigger.addEventListener("click", () => {
+    const dialog = document.getElementById(trigger.dataset.openDialog);
+    if (dialog?.showModal) dialog.showModal();
+  }));
+  document.querySelectorAll("[data-close-dialog]").forEach((trigger) => trigger.addEventListener("click", () => trigger.closest("dialog")?.close()));
+  document.querySelectorAll("dialog.create-record-dialog").forEach((dialog) => dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); }));
+
+  // Choice sets under five options become button controls; larger lists use a branded menu.
+  const enhanceSelect = (select) => {
+    if (select.dataset.customized === "true" || select.multiple || select.size > 1 || select.closest(".native-select")) return;
+    const enabled = [...select.options].filter((option) => !option.disabled && !option.hidden);
+    if (enabled.length < 2) return;
+    select.dataset.customized = "true";
+    select.classList.add("select-source");
+    const host = document.createElement("div");
+    host.className = "custom-select-host";
+    select.parentNode.insertBefore(host, select);
+    host.appendChild(select);
+    const render = () => {
+      host.querySelector(".choice-buttons, .custom-select")?.remove();
+      const options = [...select.options].filter((option) => !option.disabled && !option.hidden);
+      if (options.length < 5) {
+        const group = document.createElement("div");
+        group.className = "choice-buttons";
+        group.setAttribute("role", "group");
+        group.setAttribute("aria-label", select.closest("label")?.querySelector("span")?.textContent || "Choose an option");
+        options.forEach((option) => {
+          const button = document.createElement("button");
+          button.type = "button"; button.className = "choice-button"; button.textContent = option.textContent.trim();
+          button.setAttribute("aria-pressed", String(select.value === option.value));
+          button.addEventListener("click", () => { select.value = option.value; select.dispatchEvent(new Event("change", {bubbles:true})); render(); });
+          group.appendChild(button);
+        });
+        host.appendChild(group); return;
+      }
+      const wrapper = document.createElement("div"); wrapper.className = "custom-select";
+      const trigger = document.createElement("button"); trigger.type = "button"; trigger.className = "custom-select-trigger";
+      trigger.setAttribute("aria-haspopup","listbox"); trigger.setAttribute("aria-expanded","false");
+      const chosen = options.find((option) => option.value === select.value) || options[0];
+      trigger.append(document.createTextNode(chosen?.textContent.trim() || "Choose an option"));
+      const chevron = document.createElement("span"); chevron.className = "custom-select-chevron"; chevron.textContent = "⌄"; chevron.setAttribute("aria-hidden","true"); trigger.appendChild(chevron);
+      const list = document.createElement("div"); list.className = "custom-select-menu"; list.setAttribute("role","listbox"); list.hidden = true;
+      options.forEach((option) => {
+        const item = document.createElement("button"); item.type = "button"; item.className = "custom-select-option";
+        item.setAttribute("role","option"); item.setAttribute("aria-selected",String(select.value === option.value)); item.textContent = option.textContent.trim();
+        item.addEventListener("click", () => { select.value = option.value; select.dispatchEvent(new Event("change",{bubbles:true})); render(); });
+        list.appendChild(item);
+      });
+      trigger.addEventListener("click", () => { const open = list.hidden; document.querySelectorAll(".custom-select-menu:not([hidden])").forEach((el)=>el.hidden=true); document.querySelectorAll(".custom-select-trigger[aria-expanded='true']").forEach((el)=>el.setAttribute("aria-expanded","false")); list.hidden=!open; trigger.setAttribute("aria-expanded",String(open)); });
+      wrapper.append(trigger,list); host.appendChild(wrapper);
+    };
+    select.addEventListener("change", render); render();
+    new MutationObserver(render).observe(select,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","disabled"]});
+  };
+  document.querySelectorAll("select").forEach(enhanceSelect);
+  document.addEventListener("click",(event)=>{if(event.target.closest(".custom-select-host"))return;document.querySelectorAll(".custom-select-menu:not([hidden])").forEach((el)=>el.hidden=true);document.querySelectorAll(".custom-select-trigger[aria-expanded='true']").forEach((el)=>el.setAttribute("aria-expanded","false"));});
+  document.addEventListener("keydown",(event)=>{if(event.key==="Escape"){document.querySelectorAll(".custom-select-menu:not([hidden])").forEach((el)=>el.hidden=true);document.querySelectorAll(".custom-select-trigger[aria-expanded='true']").forEach((el)=>el.setAttribute("aria-expanded","false"));}});
+
   const form = document.querySelector("#transaction-form");
   if (form) {
     const categoryField = form.querySelector(".category-field");
