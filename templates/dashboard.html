@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Overview{% endblock %}
 {% block content %}
-<section class="page-heading"><div><div class="eyebrow">YOUR FINANCIAL PICTURE</div><h1>Good to see you.</h1><p class="subheading">Here's how your money is moving this month.</p></div><a class="icon-button primary" href="{{ url_for('transaction_new') }}" title="Add transaction" aria-label="Add transaction">✓</a></section>
+<section class="page-heading"><div><div class="eyebrow">YOUR FINANCIAL PICTURE</div><h1>Good to see you.</h1><p class="subheading">Here's how your money is moving this month.</p></div><a class="icon-button primary" href="{{ url_for('transaction_new') }}" title="Add transaction" aria-label="Add transaction">Add transaction</a></section>
 <form class="month-select" method="get"><label for="month">MONTH</label><input id="month" name="month" type="month" value="{{ month }}"><button class="button soft small" type="submit">View month</button></form>
 <section class="summary-grid">
   <article class="summary-card balance-card"><div class="card-top"><span class="card-label">Money in</span><span class="metric-icon">↙</span></div><div class="metric-value">{{ money(income) }}</div><div class="metric-foot"><span class="status-pill light">Income</span><span>For selected month</span></div><div class="card-orb"></div></article>

@@ -165,3 +165,12 @@
 .approval-upcoming-panel .simple-row-main strong{display:block;overflow-wrap:anywhere}
 .approval-upcoming-panel .simple-row>strong{white-space:nowrap}
 @media(max-width:640px){.approval-upcoming-panel{padding:17px 14px}}
+
+/* Clear text-labelled actions (instead of icon-only glyphs). */
+.icon-button{width:auto!important;min-width:0!important;height:auto!important;min-height:38px;padding:9px 13px!important;gap:6px;border:1px solid var(--line)!important;border-radius:10px!important;background:var(--panel)!important;font-size:13px!important;font-weight:700!important;line-height:1.25!important;white-space:nowrap;text-align:center}
+.icon-button.primary{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important}
+.icon-button.danger{background:#fff4f1!important;color:#a83d3d!important;border-color:#f0d0c9!important}
+.icon-button.quiet{background:var(--panel)!important;color:var(--ink)!important;border-color:var(--line)!important}
+.icon-button .ui-icon{display:none!important}
+.mobile-add{width:auto!important;min-width:62px!important;padding:9px 12px!important;border-radius:12px!important;font-size:12px!important;font-weight:800!important}
+@media(max-width:680px){.icon-button{min-height:36px;padding:8px 10px!important;font-size:12px!important}.mobile-add{min-width:54px!important}}
