@@ -908,7 +908,7 @@ def register_family_routes(app, db, models, helpers):
                 "progress": min(100, round(saved * 100 / goal.target_paise)) if goal.target_paise else 0,
                 "earmarks": earmarks, "owner_label": "Family" if goal.owner_type == "family" else (goal.member.name if goal.member else "Individual")})
         return render_template("goals.html", goal_rows=goal_rows, people=active_members(),
-                               accounts=Account.query.filter(Account.account_type != "credit", Account.is_active.is_(True)).order_by(Account.name).all(), show_archived=show_archived)
+                               accounts=Account.query.filter(Account.account_type != "credit", Account.is_active.is_(True)).order_by(Account.name).all(), show_archived=show_archived, today=date.today())
 
     @app.post("/goals/<int:goal_id>/toggle")
     @login_required
