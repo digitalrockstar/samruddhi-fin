@@ -572,3 +572,35 @@ details.inline-edit-modal[open]::before{content:"";position:fixed;inset:-100vh -
 details.inline-edit-modal[open]>summary{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
 details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margin-left:20px}
 @media(max-width:600px){.record-edit-dialog-body{padding:16px}.record-edit-dialog .record-edit-form .field-grid{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Credit card page: ledger-first summaries with readable, fluid card grids. */
+.cc-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,275px),1fr));gap:16px;align-items:stretch}
+.cc-card{display:flex;flex-direction:column;gap:0;padding:20px;min-width:0}
+.cc-card .cc-config-form{margin-top:auto}
+.cc-card .cc-current-balance strong{font-size:clamp(1.45rem,1.8vw,1.9rem);line-height:1.1;letter-spacing:-.035em}
+.cc-card-top{min-width:0}
+.cc-card-top .account-type{font-size:12px;font-weight:750;letter-spacing:0;line-height:1.35}
+.cc-limit-track{background:var(--accent-soft)}
+.cc-limit-track span{background:var(--accent)}
+.cc-config-form .field{gap:6px}
+.cc-config-form .field>span,.cc-group-edit .field>span{font-size:10px;letter-spacing:.07em}
+.cc-config-form .field input,.cc-config-form .field select,.cc-group-form .field input,.cc-group-edit .field input{font-size:13px;padding:11px 12px;min-width:0}
+.cc-management-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:start}
+.cc-workflow-panel{padding:22px;min-width:0}
+.cc-workflow-item{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;padding:16px 0;border-bottom:1px solid var(--line)}
+.cc-workflow-item:last-of-type{border-bottom:0;margin-bottom:12px}
+.cc-workflow-number{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:800}
+.cc-workflow-item strong{font-size:13px;line-height:1.4}
+.cc-workflow-item p{font-size:12px;line-height:1.65;color:var(--muted);margin:5px 0 0}
+.cc-workflow-item b{color:var(--ink)}
+.cc-section{margin-top:8px}
+.cc-section>.panel-heading{padding:0 2px}
+.cc-summary-grid{gap:14px}
+.cc-summary{min-width:0}
+.cc-summary>strong{font-size:clamp(1.25rem,2vw,1.7rem);line-height:1.2;overflow-wrap:anywhere}
+.cc-group-panel,.cc-workflow-panel{border-radius:18px}
+@media(min-width:1450px){.cc-card-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:1050px){.cc-management-grid{grid-template-columns:1fr}.cc-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,285px),1fr))}}
+@media(max-width:640px){.cc-card-grid{grid-template-columns:minmax(0,1fr)}.cc-card{padding:17px}.cc-management-grid{gap:14px}.cc-workflow-panel{padding:18px 15px}.cc-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cc-summary:last-child{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){.cc-card,.cc-workflow-item{animation:none!important;transition:none!important}}
