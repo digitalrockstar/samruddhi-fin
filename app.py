@@ -125,7 +125,7 @@ class StatementPayment(db.Model):
     transaction = db.relationship("Transaction")
 
 
-def money_to_paise(def money_to_paise(value: Any, *, allow_zero: bool = False) -> int:
+def money_to_paise(value: Any, *, allow_zero: bool = False) -> int:
     """Parse currency without binary floats and store the result as integer paise."""
     try:
         amount = Decimal(str(value).replace(",", "").replace("₹", "").strip())
