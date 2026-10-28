@@ -553,3 +553,22 @@
 .preference-panel{display:block}
 .preference-panel>div:first-child{margin-bottom:6px}
 @media(max-width:640px){.page-content > * + *{margin-top:18px}.theme-options{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Native-looking modal editor for account, budget and goal edit forms. */
+.record-edit-dialog{width:min(560px,calc(100vw - 28px));max-width:none;max-height:min(88vh,900px);padding:0;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);box-shadow:0 24px 80px rgba(0,0,0,.32);overflow:hidden}
+.record-edit-dialog::backdrop{background:rgba(9,14,12,.62);backdrop-filter:blur(3px)}
+.record-edit-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.record-edit-dialog-header strong{font:800 15px Manrope,sans-serif}
+.record-edit-dialog-close{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font-size:23px;line-height:1}
+.record-edit-dialog-body{padding:20px;overflow-y:auto;max-height:calc(88vh - 72px)}
+.record-edit-dialog .record-edit-form{border:0;margin:0;padding:0;gap:16px}
+.record-edit-dialog .record-edit-form .field-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.record-edit-dialog .record-edit-form .field{min-width:0}
+.record-edit-dialog .record-edit-form input,.record-edit-dialog .record-edit-form select{max-width:100%;min-width:0}
+.record-edit-dialog .record-edit-form input[type="color"]{width:100%;min-height:42px}
+details.inline-edit-modal[open]{position:fixed;z-index:1000;left:50%;top:50%;transform:translate(-50%,-50%);width:min(620px,calc(100vw - 28px));max-height:85vh;overflow-y:auto;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--ink);box-shadow:0 24px 80px rgba(0,0,0,.35)}
+details.inline-edit-modal[open]::before{content:"";position:fixed;inset:-100vh -100vw;background:rgba(9,14,12,.62);z-index:-1}
+details.inline-edit-modal[open]>summary{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margin-left:20px}
+@media(max-width:600px){.record-edit-dialog-body{padding:16px}.record-edit-dialog .record-edit-form .field-grid{grid-template-columns:minmax(0,1fr)}}
