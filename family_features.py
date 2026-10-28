@@ -497,7 +497,7 @@ def register_family_routes(app, db, models, helpers):
             return
         changed = False
         today = date.today()
-        for subscription in Subscription.query.filter_by(is_active=True).filter(
+        for subscription in Subscription.query.filter_by(is_active=True, is_archived=False).filter(
             Subscription.next_date <= today).order_by(Subscription.next_date).limit(100).all():
             iterations = 0
             while subscription.is_active and subscription.next_date <= today and iterations < 120:
