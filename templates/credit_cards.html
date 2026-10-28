@@ -1,54 +1,121 @@
 {% extends "base.html" %}
 {% block title %}Credit cards{% endblock %}
 {% block content %}
-<section class="page-heading"><div><div class="eyebrow">CREDIT & PAYMENTS</div><h1>Credit cards</h1><p class="subheading">Manage limits, billing statements and payment reminders in one place.</p></div><a class="button primary" href="#new-statement">＋ Add statement</a></section>
-<section class="cc-summary-grid">
-  <article class="panel cc-summary"><span>Total card debt</span><strong>{{ money(metrics.total_owed_paise) }}</strong><small>Current outstanding across credit accounts</small></article>
-  <article class="panel cc-summary"><span>Available credit</span><strong>{{ money(metrics.available_paise) }}</strong><small>Across configured individual and shared limits</small></article>
-  <article class="panel cc-summary"><span>Credit limit</span><strong>{{ money(metrics.total_limit_paise) }}</strong><small>{{ metrics.configured_count }} of {{ metrics.card_count }} cards configured</small></article>
+<section class="page-heading">
+  <div>
+    <div class="eyebrow">CREDIT & PAYMENTS</div>
+    <h1>Credit cards</h1>
+    <p class="subheading">Balances come from transactions. Record card purchases as expenses and payments as categorized transfers.</p>
+  </div>
+  <a class="button primary" href="{{ url_for('transaction_new') }}">＋ Add transaction</a>
 </section>
-{% if reminders %}<section class="panel cc-reminder-panel"><div class="panel-heading"><div><h2>Payment reminders</h2><p>In-app alerts for the 2-day warning, due date and overdue statements</p></div><span class="cc-alert-count">{{ reminders|length }}</span></div><div class="cc-reminder-list">{% for row in reminders %}<div class="cc-reminder-row"><span class="cc-reminder-icon {% if row.status == 'Overdue' %}danger{% elif row.status == 'Due today' %}warning{% endif %}">!</span><span class="cc-reminder-copy"><strong>{{ row.card.name }} · {{ row.reminder_label }}</strong><small>Due {{ row.statement.due_date.strftime('%d %b %Y') }} · {{ row.status }}</small></span><strong class="cc-reminder-amount">{{ money(row.remaining_paise) }}</strong></div>{% endfor %}</div></section>{% endif %}
-<section class="cc-section"><div class="panel-heading"><div><h2>Your cards</h2><p>Configure an individual limit or link cards to a shared bank limit.</p></div></div>
-{% if cards %}<div class="cc-card-grid">{% for row in cards %}
-<article class="panel cc-card"><div class="cc-card-top"><span class="account-avatar large" style="--swatch:{{ row.account.colour }}">▣</span><span class="account-type">{{ row.account.name }}</span></div>
-<div class="cc-current-balance"><strong>{{ money(row.owed) }}</strong><small>Current amount owed</small></div>
-{% if row.limit_paise > 0 %}<div class="cc-limit-row"><span>{{ row.mode_label }}</span><strong>{{ money(row.limit_paise) }}</strong></div><div class="cc-limit-track"><span style="width:{{ row.progress_pct }}%"></span></div><div class="cc-limit-row"><small>{{ money(row.available_paise) }} available</small><small>{{ row.utilization }}% utilized</small></div>{% else %}<div class="cc-unconfigured">Credit limit not set yet.</div>{% endif %}
-<form method="post" class="cc-config-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save_profile"><input type="hidden" name="account_id" value="{{ row.account.id }}">
-<label class="field"><span>LIMIT MODEL</span><select name="limit_mode" data-limit-mode><option value="individual" {% if not row.profile or row.profile.limit_mode == 'individual' %}selected{% endif %}>Individual limit</option><option value="shared" {% if row.profile and row.profile.limit_mode == 'shared' %}selected{% endif %}>Shared limit group</option></select></label>
-<label class="field cc-individual-limit"><span>INDIVIDUAL LIMIT (₹)</span><input name="individual_limit" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(row.profile.individual_limit_paise / 100) if row.profile and row.profile.individual_limit_paise is not none else '' }}" placeholder="e.g. 150000.00"></label>
-<label class="field cc-shared-group"><span>SHARED LIMIT GROUP</span><select name="shared_group_id"><option value="">Choose a group</option>{% for group in groups %}<option value="{{ group.id }}" {% if row.profile and row.profile.shared_group_id == group.id %}selected{% endif %}>{{ group.name }} · {{ money(group.limit_paise) }}</option>{% endfor %}</select></label>
-<div class="field-grid"><label class="field"><span>STATEMENT DAY</span><input name="statement_day" type="number" min="1" max="28" value="{{ row.profile.statement_day if row.profile else 1 }}" required></label><label class="field"><span>DUE DAY</span><input name="due_day" type="number" min="1" max="28" value="{{ row.profile.due_day if row.profile else 20 }}" required></label></div>
-<button class="button outline full-button" type="submit">Save card details</button></form></article>
-{% endfor %}</div>{% else %}<div class="panel empty-state"><span class="empty-icon">▣</span><strong>No credit card accounts yet</strong><p>Add a credit-card account under Accounts, then configure its limit here.</p><a class="button primary" href="{{ url_for('accounts') }}">Go to accounts</a></div>{% endif %}</section>
-<section class="cc-lower-grid">
-<article class="panel cc-group-panel"><div class="panel-heading"><div><h2>Shared limit groups</h2><p>One bank-approved limit shared by two or more cards.</p></div></div>
-{% if groups %}<div class="cc-group-list">{% for group in groups %}
-<div class="cc-group-edit-card">
-  <div class="cc-group-item"><span><strong>{{ group.name }}</strong><small>{% set linked_count = namespace(value=0) %}{% for card_row in cards %}{% if card_row.group and card_row.group.id == group.id %}{% set linked_count.value = linked_count.value + 1 %}{% endif %}{% endfor %}{{ linked_count.value }} linked card(s)</small></span><strong>{{ money(group.limit_paise) }}</strong></div>
-  <form method="post" class="cc-group-edit"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update_group"><input type="hidden" name="group_id" value="{{ group.id }}">
-    <label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" value="{{ group.name }}" required></label>
-    <label class="field"><span>SHARED LIMIT (₹)</span><input name="group_limit" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(group.limit_paise / 100) }}" required></label>
-    <button class="button outline" type="submit">Update</button>
-  </form>
-</div>{% endfor %}</div>{% else %}<p class="cc-muted">No shared groups yet. Create one when your bank provides a combined limit.</p>{% endif %}
-<form method="post" class="stack-form cc-group-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create_group"><label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" placeholder="e.g. Household shared limit" required></label><label class="field"><span>SHARED CREDIT LIMIT (₹)</span><input name="group_limit" type="number" min="0.01" step="0.01" placeholder="e.g. 200000" required></label><button class="button primary full-button" type="submit">＋ Create shared group</button></form></article>
-<article class="panel cc-statement-form" id="new-statement"><div class="panel-heading"><div><h2>Add statement</h2><p>The total due is calculated from card transactions through the statement date. Enter the bank-issued minimum due and verify the payment deadline.</p></div></div>
-{% if cards %}<form method="post" class="stack-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save_statement">
-<label class="field"><span>CREDIT CARD</span><select name="account_id" id="cc-statement-card" required>{% for row in cards %}<option value="{{ row.account.id }}" data-due-day="{{ row.profile.due_day if row.profile else 20 }}">{{ row.account.name }}</option>{% endfor %}</select></label>
-<label class="field"><span>STATEMENT MONTH</span><input type="month" name="statement_month" value="{{ current_month }}" required></label>
-<div class="field-grid"><label class="field"><span>STATEMENT DATE</span><input type="date" id="cc-statement-date" name="statement_date" value="{{ today }}" required></label><label class="field"><span>PAYMENT DUE DATE</span><input type="date" id="cc-due-date" name="due_date" value="{{ two_days_from_now }}" required><small class="cc-muted">Suggested from this card’s due-day setting; verify against the bank statement.</small></label></div>
-<div class="field-grid"><div class="field"><span>CALCULATED TOTAL DUE</span><p class="cc-muted">Based on card opening amount and transactions dated on or before the statement date.</p></div><label class="field"><span>MINIMUM AMOUNT DUE (₹)</span><input type="number" name="minimum_due" min="0" step="0.01" value="0.00" required></label></div>
-<label class="field"><span>NOTE <em>OPTIONAL</em></span><textarea name="notes" rows="2" maxlength="500" placeholder="Statement reference or a note"></textarea></label><button class="button primary full-button" type="submit">Save statement</button>
-</form>{% else %}<p class="cc-muted">Create a credit card account first to start tracking statements.</p>{% endif %}</article></section>
-<section class="panel cc-statements-panel"><div class="panel-heading"><div><h2>Statements & payments</h2><p>Payments recorded here create a bank-to-card transfer and reduce the linked statement balance.</p></div></div>
-{% if statements %}<div class="cc-statement-list">{% for row in statements %}<article class="cc-statement">
-<div class="cc-statement-head"><div><strong>{{ row.card.name }}</strong><small>{{ row.statement.statement_month }} statement · issued {{ row.statement.statement_date.strftime('%d %b %Y') }}</small></div><span class="cc-status {% if row.status == 'Overdue' %}danger{% elif row.status == 'Paid' %}paid{% elif row.status == 'Due today' %}warning{% endif %}">{{ row.status }}</span></div>
-<div class="cc-statement-values"><div><small>Statement total</small><strong>{{ money(row.statement.total_due_paise) }}</strong></div><div><small>Paid</small><strong>{{ money(row.paid_paise) }}</strong></div><div><small>Remaining</small><strong>{{ money(row.remaining_paise) }}</strong></div><div><small>Minimum due</small><strong>{{ money(row.statement.minimum_due_paise) }}</strong></div><div><small>Due date</small><strong>{{ row.statement.due_date.strftime('%d %b %Y') }}</strong></div></div>
-{% if row.statement.notes %}<p class="cc-statement-note">{{ row.statement.notes }}</p>{% endif %}
-{% if row.remaining_paise > 0 %}<form method="post" class="cc-payment-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="record_payment"><input type="hidden" name="statement_id" value="{{ row.statement.id }}">
-<label class="field"><span>PAY FROM</span><select name="payment_account_id" required>{% for account in payment_accounts %}<option value="{{ account.id }}">{{ account.name }}</option>{% endfor %}</select></label>
-<label class="field"><span>PAYMENT AMOUNT (₹)</span><input type="number" name="payment_amount" min="0.01" max="{{ '%.2f'|format(row.remaining_paise / 100) }}" step="0.01" placeholder="{{ '%.2f'|format(row.remaining_paise / 100) }}" required></label>
-<label class="field"><span>PAYMENT DATE</span><input type="date" name="payment_date" value="{{ today }}" required></label><button class="button primary" type="submit">Record payment</button>
-</form>{% else %}<p class="cc-paid-note">✓ This statement is fully paid.</p>{% endif %}</article>{% endfor %}</div>
-{% else %}<div class="empty-state compact"><span class="empty-icon">▤</span><strong>No statements recorded</strong><p>Add your latest card statement to start seeing payment reminders.</p></div>{% endif %}</section>
+
+<section class="cc-summary-grid" aria-label="Credit card totals">
+  <article class="panel cc-summary"><span>Total amount owed</span><strong>{{ money(metrics.total_owed_paise) }}</strong><small>Across active credit cards</small></article>
+  <article class="panel cc-summary"><span>Available credit</span><strong>{{ money(metrics.available_paise) }}</strong><small>From configured limits</small></article>
+  <article class="panel cc-summary"><span>Total credit limit</span><strong>{{ money(metrics.total_limit_paise) }}</strong><small>{{ metrics.configured_count }} of {{ metrics.card_count }} cards configured</small></article>
+</section>
+
+<section class="cc-section">
+  <div class="panel-heading">
+    <div><h2>Your cards</h2><p>Live amounts owed are calculated from the account ledger, including categorized card-payment transfers.</p></div>
+  </div>
+  {% if cards %}
+  <div class="cc-card-grid">
+    {% for row in cards %}
+    <article class="panel cc-card">
+      <div class="cc-card-top">
+        <span class="account-avatar large" style="--swatch:{{ row.account.colour }}">▣</span>
+        <span class="account-type">{{ row.account.name }}</span>
+      </div>
+      <div class="cc-current-balance">
+        <strong>{{ money(row.owed) }}</strong>
+        <small>Current amount owed</small>
+      </div>
+      {% if row.limit_paise > 0 %}
+        <div class="cc-limit-row"><span>{{ row.mode_label }}</span><strong>{{ money(row.limit_paise) }}</strong></div>
+        <div class="cc-limit-track" role="progressbar" aria-label="Credit used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ row.progress_pct }}"><span style="width:{{ row.progress_pct }}%"></span></div>
+        <div class="cc-limit-row"><small>{{ money(row.available_paise) }} available</small><small>{{ row.utilization }}% utilized</small></div>
+      {% else %}
+        <div class="cc-unconfigured">Credit limit not configured</div>
+      {% endif %}
+
+      <form method="post" class="cc-config-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="save_profile">
+        <input type="hidden" name="account_id" value="{{ row.account.id }}">
+        <label class="field">
+          <span>LIMIT MODEL</span>
+          <select name="limit_mode" data-limit-mode>
+            <option value="individual" {% if not row.profile or row.profile.limit_mode == 'individual' %}selected{% endif %}>Individual limit</option>
+            <option value="shared" {% if row.profile and row.profile.limit_mode == 'shared' %}selected{% endif %}>Shared limit group</option>
+          </select>
+        </label>
+        <label class="field cc-individual-limit">
+          <span>INDIVIDUAL LIMIT · INR</span>
+          <input name="individual_limit" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(row.profile.individual_limit_paise / 100) if row.profile and row.profile.individual_limit_paise is not none else '' }}" placeholder="e.g. 150000.00">
+        </label>
+        <label class="field cc-shared-group">
+          <span>SHARED LIMIT GROUP</span>
+          <select name="shared_group_id">
+            <option value="">Choose a group</option>
+            {% for group in groups %}<option value="{{ group.id }}" {% if row.profile and row.profile.shared_group_id == group.id %}selected{% endif %}>{{ group.name }} · {{ money(group.limit_paise) }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="button outline full-button" type="submit">Save credit limit</button>
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="panel empty-state">
+      <span class="empty-icon">▣</span><strong>No active credit cards</strong>
+      <p>Add an account with type Credit under Accounts to manage its balance and limit here.</p>
+      <a class="button primary" href="{{ url_for('accounts') }}">Go to accounts</a>
+    </div>
+  {% endif %}
+</section>
+
+<section class="cc-lower-grid cc-management-grid">
+  <article class="panel cc-group-panel">
+    <div class="panel-heading"><div><h2>Shared limit groups</h2><p>For cards that draw from a single bank-approved credit limit.</p></div></div>
+    {% if groups %}
+      <div class="cc-group-list">
+      {% for group in groups %}
+        <div class="cc-group-edit-card">
+          <div class="cc-group-item">
+            <span><strong>{{ group.name }}</strong><small>{% set linked_count = namespace(value=0) %}{% for card_row in cards %}{% if card_row.group and card_row.group.id == group.id %}{% set linked_count.value = linked_count.value + 1 %}{% endif %}{% endfor %}{{ linked_count.value }} linked card(s)</small></span>
+            <strong>{{ money(group.limit_paise) }}</strong>
+          </div>
+          <form method="post" class="cc-group-edit">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="update_group">
+            <input type="hidden" name="group_id" value="{{ group.id }}">
+            <label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" value="{{ group.name }}" required></label>
+            <label class="field"><span>SHARED LIMIT · INR</span><input name="group_limit" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(group.limit_paise / 100) }}" required></label>
+            <button class="button outline" type="submit">Update</button>
+          </form>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="cc-muted">No shared limit groups yet.</p>
+    {% endif %}
+    <form method="post" class="stack-form cc-group-form">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="create_group">
+      <label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" placeholder="e.g. Household shared limit" required></label>
+      <label class="field"><span>SHARED CREDIT LIMIT · INR</span><input name="group_limit" type="number" min="0.01" step="0.01" placeholder="e.g. 200000" required></label>
+      <button class="button primary full-button" type="submit">＋ Create shared group</button>
+    </form>
+  </article>
+
+  <article class="panel cc-workflow-panel">
+    <div class="panel-heading"><div><h2>How to record card activity</h2><p>One ledger entry keeps balances, history and reporting consistent.</p></div></div>
+    <div class="cc-workflow-item"><span class="cc-workflow-number">01</span><div><strong>Card purchase</strong><p>Add an <b>Expense</b>, choose the credit-card account, and select the appropriate expense category. The amount owed increases automatically.</p></div></div>
+    <div class="cc-workflow-item"><span class="cc-workflow-number">02</span><div><strong>Pay a credit card</strong><p>Add a <b>Transfer</b> from your bank or cash account to the credit-card account. Choose <b>CC Payment</b>. The card amount owed decreases automatically.</p></div></div>
+    <div class="cc-workflow-item"><span class="cc-workflow-number">03</span><div><strong>Move money to investments</strong><p>Use a <b>Transfer</b> between accounts and choose <b>Investment</b>. For ordinary movements between your own accounts, choose <b>Self-Transfer</b>.</p></div></div>
+    <a class="button primary full-button" href="{{ url_for('transaction_new') }}">＋ Record a transaction</a>
+  </article>
+</section>
 {% endblock %}
