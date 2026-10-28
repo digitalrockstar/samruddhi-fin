@@ -450,7 +450,7 @@ def register_family_routes(app, db, models, helpers):
         return category
 
     def due_subscriptions():
-        if request.endpoint in {"login", "setup", "static"}:
+        if request.method != "GET" or request.endpoint in {"login", "setup", "static"}:
             return
         if not current_app.config.get("TESTING") and not session.get("member_id"):
             return
@@ -621,7 +621,8 @@ def register_family_routes(app, db, models, helpers):
             row["owner_label"] = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             budget_rows.append(row)
         return render_template("budgets.html", budget_rows=budget_rows, people=active_members(),
-            categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(), today=date.today())
+            categories=Category.query.filter_by(kind="expense").order_by(Category.name).all(),
+            today=date.today(), month_start=date.today().replace(day=1).isoformat())
 
     @app.post("/budgets/<int:budget_id>/toggle")
     @login_required
