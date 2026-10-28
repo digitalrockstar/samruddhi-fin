@@ -41,13 +41,6 @@
     <header class="topbar">
       <a class="mobile-brand" href="{{ url_for('dashboard') }}"><img class="brand-mark-image mobile-brand-mark" src="{{ url_for('static', filename='favicon.svg') }}?v=20261028-gold-mark" alt=""><strong>samruddhi</strong></a>
       <div class="topbar-spacer"></div>
-      <div class="theme-picker" aria-label="Choose colour theme">
-        <button type="button" class="theme-dot mint" data-theme-choice="mint" aria-label="Mint theme"></button>
-        <button type="button" class="theme-dot blue" data-theme-choice="blue" aria-label="Blue theme"></button>
-        <button type="button" class="theme-dot violet" data-theme-choice="violet" aria-label="Violet theme"></button>
-        <button type="button" class="theme-dot peach" data-theme-choice="peach" aria-label="Peach theme"></button>
-        <button type="button" class="theme-dot dark" data-theme-choice="dark" aria-label="Dark theme" title="Dark theme"></button>
-      </div>
       <a class="avatar" href="{{ url_for('change_password') }}" aria-label="Change password" title="Change password">{{ current_member.name[:1]|upper if current_member else 'S' }}</a>
     </header>
     <div class="page-content">
