@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from app import (
-    Account, AccountOwner, Budget, CashbackEvent, CashbackScheme, Category, CreditCardProfile,
+    Account, AccountOwner, Budget, CashbackEvent, CashbackScheme, Category, CategoryParent, CreditCardProfile,
     CreditCardStatement, CreditLimitGroup, FamilyMember, Goal, GoalEarmark, Subscription,
     Transaction, TransactionBeneficiary, TransactionMetadata, create_app, db, money_to_paise,
 )
@@ -583,3 +583,60 @@ def test_transaction_payer_is_snapshotted_when_account_owner_changes(app, client
     response = client.get("/transactions")
     assert response.status_code == 200
     assert b"Original payer" in response.data
+
+
+def test_category_hierarchy_is_limited_to_l1_and_l2(client, app):
+    response = post_form(client, "/categories", {
+        "name": "Grocery", "kind": "expense", "parent_category_id": "", "colour": "#7297d2",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        parent_id = Category.query.filter_by(name="Grocery").one().id
+
+    response = post_form(client, "/categories", {
+        "name": "Zepto", "kind": "expense", "parent_category_id": str(parent_id), "colour": "#7297d2",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        child = Category.query.filter_by(name="Zepto").one()
+        child_id = child.id
+        assert db.session.get(CategoryParent, child_id).parent_category_id == parent_id
+
+    response = post_form(client, "/categories", {
+        "name": "Fresh delivery", "kind": "expense", "parent_category_id": str(child_id), "colour": "#7297d2",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"one level" in response.data
+    with app.app_context():
+        assert Category.query.filter_by(name="Fresh delivery").count() == 0
+
+
+def test_legacy_transaction_metadata_backfill_is_idempotent(tmp_path):
+    database = f"sqlite:///{tmp_path / 'migration.sqlite'}"
+    config = {"TESTING": True, "SECRET_KEY": "test-only-secret", "SQLALCHEMY_DATABASE_URI": database}
+    first_app = create_app(config)
+    with first_app.app_context():
+        account = Account.query.filter_by(name="Cash").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        transaction = Transaction(
+            transaction_date=date.today(), kind="expense", amount_paise=2500,
+            description="Pre-family transaction", account_id=account.id, category_id=category.id)
+        db.session.add(transaction)
+        db.session.commit()
+        transaction_id = transaction.id
+        db.session.remove()
+
+    second_app = create_app(config)
+    with second_app.app_context():
+        metadata = db.session.get(TransactionMetadata, transaction_id)
+        assert metadata is not None
+        assert metadata.source == "legacy"
+        assert metadata.payer_snapshot_set is True
+        assert metadata.payer_member_id is None
+        db.session.remove()
+
+    third_app = create_app(config)
+    with third_app.app_context():
+        assert TransactionMetadata.query.filter_by(transaction_id=transaction_id).count() == 1
+        db.session.remove()
+        db.drop_all()
