@@ -14,7 +14,7 @@ from typing import Any
 
 from flask import Flask, Response, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import UniqueConstraint, func, or_
+from sqlalchemy import UniqueConstraint, func, inspect as sqlalchemy_inspect, or_, text
 from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
@@ -364,6 +364,33 @@ def current_password() -> str:
     return str(current_app.config.get("APP_PASSWORD") or os.environ.get("APP_PASSWORD") or "")
 
 
+def ensure_additive_schema() -> None:
+    """Apply safe additive changes for databases created by earlier development builds."""
+    inspector = sqlalchemy_inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    changes = [
+        ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
+        ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
+        ("subscription", "cashback_rate_bps", "INTEGER"),
+        ("subscription", "cashback_destination_account_id", "INTEGER REFERENCES account(id)"),
+        ("subscription", "cashback_delay_days", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    columns_by_table = {
+        table: {column["name"] for column in inspector.get_columns(table)}
+        for table in table_names if table in {"transaction_metadata", "subscription"}
+    }
+    for table, column, definition in changes:
+        if table in table_names and column not in columns_by_table.get(table, set()):
+            db.session.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {definition}'))
+    if "subscription_occurrence" in table_names:
+        db.session.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_subscription_occurrence_date "
+            "ON subscription_occurrence(subscription_id, occurrence_date)"
+        ))
+    db.session.commit()
+
+
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.update(
@@ -400,6 +427,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     })
     with app.app_context():
         db.create_all()
+        ensure_additive_schema()
         seed_defaults()
         # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
         # They remain in the shared family context until an existing transaction is edited.
