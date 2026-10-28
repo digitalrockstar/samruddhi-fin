@@ -403,7 +403,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         seed_defaults()
         # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
         # They remain in the shared family context until an existing transaction is edited.
-        known_metadata_ids = set(db.session.query(TransactionMetadata.transaction_id).all())
+        known_metadata_ids = {row[0] for row in db.session.query(TransactionMetadata.transaction_id).all()}
         for legacy_txn in Transaction.query.order_by(Transaction.id).all():
             if legacy_txn.id not in known_metadata_ids:
                 db.session.add(TransactionMetadata(
