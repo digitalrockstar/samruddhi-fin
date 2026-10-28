@@ -199,6 +199,21 @@
     select?.addEventListener("change", updateLimitMode);
     updateLimitMode();
   });
+  const categoryKindSelect = document.querySelector("#category-kind");
+  const categoryParentSelect = document.querySelector("#category-parent");
+  if (categoryKindSelect && categoryParentSelect) {
+    const filterCategoryParents = () => {
+      const kind = categoryKindSelect.value;
+      [...categoryParentSelect.options].forEach((option) => {
+        if (!option.value) return;
+        option.hidden = option.dataset.kind !== kind;
+        if (option.dataset.kind !== kind && option.selected) categoryParentSelect.value = "";
+      });
+    };
+    categoryKindSelect.addEventListener("change", filterCategoryParents);
+    filterCategoryParents();
+  }
+
   // Local inline SVG icons replace platform-dependent text glyphs in controls.
   const iconPaths = {
     save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
