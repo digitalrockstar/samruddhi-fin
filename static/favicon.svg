@@ -1,22 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-<title id="title">Samruddhi family finance</title>
+<title id="title">Samruddhi Finance</title>
 <defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#087f78"/><stop offset="1" stop-color="#062f3a"/></linearGradient>
-  <linearGradient id="mint" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9bf0b0"/><stop offset="1" stop-color="#39b987"/></linearGradient>
-  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd777"/><stop offset="1" stop-color="#ff9d36"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff0a8"/>
+    <stop offset=".28" stop-color="#f8d46d"/>
+    <stop offset=".62" stop-color="#d99a2b"/>
+    <stop offset=".82" stop-color="#ffdf7d"/>
+    <stop offset="1" stop-color="#9c6214"/>
+  </linearGradient>
+  <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff3bd"/>
+    <stop offset="1" stop-color="#a86614"/>
+  </linearGradient>
+  <filter id="emboss" x="-25%" y="-25%" width="150%" height="160%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation=".55" result="blur"/>
+    <feOffset in="blur" dx=".45" dy=".8" result="shadow"/>
+    <feFlood flood-color="#6f4308" flood-opacity=".9" result="shadowColor"/>
+    <feComposite in="shadowColor" in2="shadow" operator="in" result="shadowShape"/>
+    <feMerge><feMergeNode in="shadowShape"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
 </defs>
-<rect x="1" y="1" width="62" height="62" rx="15" fill="url(#bg)"/>
-<path d="M9 27.5 31.8 10 55 27.5" fill="none" stroke="#fff7e8" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M15 26.5v20.8h34V26.5" fill="none" stroke="#fff7e8" stroke-opacity=".45" stroke-width="1.2"/>
-<circle cx="22.5" cy="31" r="4.2" fill="#45d6bf"/>
-<circle cx="41.5" cy="31" r="4.2" fill="#ffbd4c"/>
-<circle cx="32" cy="34.8" r="3.25" fill="#b3f2b0"/>
-<path d="M15.8 43c.3-5.2 3.1-7.5 6.7-7.5 2.8 0 4.4 1.1 5.8 3.4L22.7 47z" fill="#23b7a5"/>
-<path d="M48.2 43c-.3-5.2-3.1-7.5-6.7-7.5-2.8 0-4.4 1.1-5.8 3.4l5.6 8.1z" fill="#ffad42"/>
-<path d="M26 43c.5-3.4 2.4-4.6 6-4.6s5.5 1.2 6 4.6v4.4H26z" fill="url(#mint)"/>
-<rect x="22" y="46" width="5" height="7.5" rx="1" fill="#8de9a5"/>
-<rect x="29.5" y="43.8" width="5" height="9.7" rx="1" fill="#69d69a"/>
-<rect x="37" y="40.8" width="5" height="12.7" rx="1" fill="#b7f3ad"/>
-<path d="M9.7 45.5c2.5 8.2 11.2 12.3 22.3 12.3 10 0 17.5-4.8 21-13.9" fill="none" stroke="url(#gold)" stroke-width="3.3" stroke-linecap="round"/>
-<path d="m48.4 43.4 5-.2-.4 5.1" fill="none" stroke="#ffd777" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect width="64" height="64" fill="#050505"/>
+<g filter="url(#emboss)">
+  <path d="M17.5 24.5 32 12.7 46.5 24.5" fill="none" stroke="#8f5a12" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17.5 23.8 32 12 46.5 23.8" fill="none" stroke="url(#gold)" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="32" y="50.5" text-anchor="middle" font-family="Arial, 'Noto Sans', sans-serif" font-size="27" font-weight="600" fill="url(#gold)" stroke="#a56c18" stroke-width=".35" paint-order="stroke fill">₹</text>
+</g>
 </svg>
