@@ -174,3 +174,61 @@
 .icon-button .ui-icon{display:none!important}
 .mobile-add{width:auto!important;min-width:62px!important;padding:9px 12px!important;border-radius:12px!important;font-size:12px!important;font-weight:800!important}
 @media(max-width:680px){.icon-button{min-height:36px;padding:8px 10px!important;font-size:12px!important}.mobile-add{min-width:54px!important}}
+
+
+/* Details toggles should read and behave like buttons, not plain text links. */
+.account-edit-toggle{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;list-style:none;user-select:none}
+.account-edit-toggle::-webkit-details-marker{display:none}
+.account-edit-toggle::marker{content:""}
+.account-edit-toggle:hover{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent)}
+.finance-card-actions,.inline-icon-actions,.record-actions{align-items:center;flex-wrap:wrap;gap:8px}
+.inline-icon-actions .icon-button{min-width:94px}
+.password-panel{max-width:100%;padding:clamp(18px,2.2vw,28px)}
+.password-panel .stack-form{gap:18px}
+.login-panel .icon-button{width:100%;min-height:42px}
+
+/* Subtle page-load motion: cards and content settle in without blocking interaction. */
+@keyframes samruddhi-enter{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.page-heading{animation:samruddhi-enter .42s cubic-bezier(.2,.7,.25,1) both}
+.page-content>.panel,
+.page-content>.content-grid,
+.page-content>.summary-grid,
+.page-content>.accounts-layout,
+.page-content>.settings-layout,
+.page-content>.finance-card-grid,
+.page-content>.transaction-table-wrap,
+.page-content>.toolbar,
+.page-content>.month-select,
+.page-content>.record-view-toggle,
+.page-content>.form-layout,
+.page-content>.cc-summary-grid,
+.page-content>.cc-card-grid,
+.page-content>.cc-lower-grid,
+.page-content>.cc-reminder-panel{
+  animation:samruddhi-enter .48s cubic-bezier(.2,.7,.25,1) both;
+}
+.page-content>.panel:nth-of-type(2),
+.page-content>.content-grid,
+.page-content>.accounts-layout,
+.page-content>.summary-grid,
+.page-content>.finance-card-grid{animation-delay:.05s}
+.page-content>.panel:nth-of-type(3),
+.page-content>.cc-lower-grid{animation-delay:.1s}
+.summary-card,.account-card,.finance-card,.cc-card{
+  animation:samruddhi-enter .48s cubic-bezier(.2,.7,.25,1) both;
+}
+.summary-card:nth-child(2),.account-card:nth-child(2),.finance-card:nth-child(2),.cc-card:nth-child(2){animation-delay:.05s}
+.summary-card:nth-child(3),.account-card:nth-child(3),.finance-card:nth-child(3),.cc-card:nth-child(3){animation-delay:.1s}
+.summary-card:nth-child(4),.account-card:nth-child(4),.finance-card:nth-child(4),.cc-card:nth-child(4){animation-delay:.15s}
+.summary-card:nth-child(5),.account-card:nth-child(5),.finance-card:nth-child(5),.cc-card:nth-child(5){animation-delay:.2s}
+@media(prefers-reduced-motion:reduce){
+  .page-heading,.page-content>.panel,.page-content>.content-grid,.page-content>.summary-grid,
+  .page-content>.accounts-layout,.page-content>.settings-layout,.page-content>.finance-card-grid,
+  .page-content>.transaction-table-wrap,.page-content>.toolbar,.page-content>.month-select,
+  .page-content>.record-view-toggle,.page-content>.form-layout,.page-content>.cc-summary-grid,
+  .page-content>.cc-card-grid,.page-content>.cc-lower-grid,.page-content>.cc-reminder-panel,
+  .summary-card,.account-card,.finance-card,.cc-card{animation:none!important;opacity:1!important;transform:none!important}
+}
