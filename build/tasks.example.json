@@ -1,0 +1,11 @@
+{
+  "project_id": "samruddhi-fin",
+  "note": "Example planning data only, not execution telemetry.",
+  "tasks": [
+    {"id":"P1-01","title":"Discover local runtime and Codex interface","phase":1,"status":"ready","depends_on":[],"acceptance_criteria":["Runtime versions recorded","Codex invocation verified from installed help or official docs","Legacy/secrets untouched"]},
+    {"id":"P1-02","title":"Implement persistent task/event model","phase":1,"status":"not_started","depends_on":["P1-01"],"acceptance_criteria":["Transitions validated","Events survive restart","Invalid transition rejected"]},
+    {"id":"P1-03","title":"Implement verified Codex adapter","phase":1,"status":"not_started","depends_on":["P1-01","P1-02"],"acceptance_criteria":["Supported agent invocation actually runs","Exit code and safe output captured","Unsupported path is shown as blocker"]},
+    {"id":"P1-04","title":"Run test and persist real verification evidence","phase":1,"status":"not_started","depends_on":["P1-02","P1-03"],"acceptance_criteria":["Real test command executed","Output and exit code persisted","Counts shown only when source output supports them"]},
+    {"id":"P1-05","title":"Display live task/run state and confirm restart recovery","phase":1,"status":"not_started","depends_on":["P1-02","P1-04"],"acceptance_criteria":["Console shows persisted state and evidence","Real stream or polling updates the UI","State survives restart"]}
+  ]
+}
