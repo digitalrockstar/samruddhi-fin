@@ -932,10 +932,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             for row in rows:
                 if row.get("error") or duplicate_exists(row):
                     continue
-                db.session.add(Transaction(transaction_date=date.fromisoformat(row["date"]),
+                txn = Transaction(transaction_date=date.fromisoformat(row["date"]),
                     kind=row["type"], amount_paise=int(row["amount_paise"]), description=row["description"],
                     account_id=int(row["account_id"]), category_id=row.get("category_id"),
-                    transfer_to_account_id=row.get("transfer_to_account_id"), notes=row.get("notes", "")))
+                    transfer_to_account_id=row.get("transfer_to_account_id"), notes=row.get("notes", ""))
+                db.session.add(txn)
+                db.session.flush()
+                account_owner = AccountOwner.query.filter_by(account_id=txn.account_id).first()
+                db.session.add(TransactionMetadata(
+                    transaction_id=txn.id, budget_scope="family", source="import",
+                    payer_member_id=account_owner.member_id if account_owner else None,
+                    payer_snapshot_set=True))
                 saved += 1
             batch.consumed = True
             db.session.commit()
