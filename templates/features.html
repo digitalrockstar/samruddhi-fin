@@ -10,4 +10,4 @@
 {% if is_admin %}<a class="finance-card feature-link" href="{{ url_for('people') }}"><div class="feature-icon">♙</div><h3>People</h3><p class="finance-muted">Family member logins</p></a>{% endif %}
 <a class="finance-card feature-link" href="{{ url_for('categories') }}"><div class="feature-icon">◈</div><h3>Categories</h3><p class="finance-muted">L1 and L2 categories</p></a><a class="finance-card feature-link" href="{{ url_for('change_password') }}"><div class="feature-icon">⌑</div><h3>Change password</h3><p class="finance-muted">Update your personal login</p></a>
 {% if is_admin %}<a class="finance-card feature-link" href="{{ url_for('cashback_schemes') }}"><div class="feature-icon">%</div><h3>Cashback schemes</h3><p class="finance-muted">Card reward rules</p></a>{% endif %}
-</section>{% endblock %}
+{% if is_admin %}<a class="finance-card feature-link" href="{{ url_for('settings') }}"><div class="feature-icon">⚙</div><h3>Settings & data reset</h3><p class="finance-muted">Backups and administrative maintenance</p></a>{% endif %}</section>{% endblock %}
