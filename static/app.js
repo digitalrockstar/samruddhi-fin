@@ -199,34 +199,6 @@
     select?.addEventListener("change", updateLimitMode);
     updateLimitMode();
   });
-  const statementForm = document.querySelector('form input[name="action"][value="save_statement"]')?.closest("form");
-  if (statementForm) {
-    const cardSelect = statementForm.querySelector("#cc-statement-card");
-    const statementDate = statementForm.querySelector("#cc-statement-date");
-    const dueDate = statementForm.querySelector("#cc-due-date");
-    const suggestDueDate = () => {
-      if (!cardSelect || !statementDate || !dueDate || !statementDate.value) return;
-      const [year, month, day] = statementDate.value.split("-").map(Number);
-      const statementDay = Number(day);
-      const configuredDueDay = Number(cardSelect.selectedOptions[0]?.dataset.dueDay || 20);
-      let dueYear = year;
-      let dueMonth = month - 1;
-      if (configuredDueDay <= statementDay) {
-        dueMonth += 1;
-        if (dueMonth > 11) { dueMonth = 0; dueYear += 1; }
-      }
-      const suggested = new Date(dueYear, dueMonth, configuredDueDay);
-      dueDate.value = [
-        suggested.getFullYear(),
-        String(suggested.getMonth() + 1).padStart(2, "0"),
-        String(suggested.getDate()).padStart(2, "0")
-      ].join("-");
-    };
-    cardSelect?.addEventListener("change", suggestDueDate);
-    statementDate?.addEventListener("change", suggestDueDate);
-    suggestDueDate();
-  }
-
   // Local inline SVG icons replace platform-dependent text glyphs in controls.
   const iconPaths = {
     save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
