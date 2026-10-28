@@ -251,11 +251,17 @@ class Subscription(db.Model):
     budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True)
     budget_scope = db.Column(db.String(12), nullable=False, default="family")
     beneficiary_ids_json = db.Column(db.Text, nullable=False, default="[]")
+    cashback_scheme_id = db.Column(db.Integer, db.ForeignKey("cashback_scheme.id"), nullable=True)
+    cashback_rate_bps = db.Column(db.Integer, nullable=True)
+    cashback_destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    cashback_delay_days = db.Column(db.Integer, nullable=False, default=0)
     created_from_transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
     account = db.relationship("Account", foreign_keys=[account_id])
     category = db.relationship("Category")
     budget = db.relationship("Budget")
+    cashback_scheme = db.relationship("CashbackScheme")
+    cashback_destination_account = db.relationship("Account", foreign_keys=[cashback_destination_account_id])
     origin_transaction = db.relationship("Transaction", foreign_keys=[created_from_transaction_id])
 
 
@@ -266,6 +272,7 @@ class SubscriptionOccurrence(db.Model):
     occurrence_date = db.Column(db.Date, nullable=False)
     subscription = db.relationship("Subscription")
     transaction = db.relationship("Transaction")
+    __table_args__ = (UniqueConstraint("subscription_id", "occurrence_date", name="uq_subscription_occurrence_date"),)
 
 
 class CashbackEvent(db.Model):
