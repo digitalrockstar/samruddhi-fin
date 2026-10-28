@@ -1,4 +1,4 @@
-# Local secrets and generated files
+# Secrets and local environment
 .env
 .env.*
 !.env.example
@@ -9,3 +9,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
+
+# Local application data
+instance/
+*.db
+*.sqlite
+*.sqlite3
+*.csv
