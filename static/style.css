@@ -256,3 +256,8 @@
 .theme-dot.is-selected{outline:2px solid var(--accent-strong);outline-offset:3px;box-shadow:0 0 0 5px var(--accent-soft)}
 .theme-dot:active{transform:scale(.92)}
 .theme-dot[aria-pressed="true"]::after{content:"";position:absolute;inset:5px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(30,45,35,.25)}
+
+
+/* Reuse the black-and-gold home/rupee mark in the sidebar and mobile brand. */
+.brand-mark-image{display:block;width:39px;height:39px;flex:0 0 39px;object-fit:contain;border-radius:11px;box-shadow:0 2px 5px rgba(0,0,0,.12)}
+.mobile-brand .brand-mark-image{width:31px;height:31px;flex-basis:31px;border-radius:9px}
