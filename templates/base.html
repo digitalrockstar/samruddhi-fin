@@ -20,7 +20,13 @@
       <a class="nav-link {% if request.endpoint in ['transactions','transaction_new','transaction_edit'] %}active{% endif %}" href="{{ url_for('transactions') }}"><span class="nav-icon">⇄</span><span>Transactions</span></a>
       <a class="nav-link {% if request.endpoint == 'accounts' %}active{% endif %}" href="{{ url_for('accounts') }}"><span class="nav-icon">▤</span><span>Accounts</span></a>
       <a class="nav-link {% if request.endpoint == 'credit_cards' %}active{% endif %}" href="{{ url_for('credit_cards') }}"><span class="nav-icon">▣</span><span>Credit cards</span></a>
+      <a class="nav-link {% if request.endpoint == 'budgets' %}active{% endif %}" href="{{ url_for('budgets') }}"><span class="nav-icon">▥</span><span>Budgets</span></a>
+      <a class="nav-link {% if request.endpoint == 'goals' %}active{% endif %}" href="{{ url_for('goals') }}"><span class="nav-icon">◎</span><span>Goals</span></a>
+      <a class="nav-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" href="{{ url_for('subscriptions') }}"><span class="nav-icon">◷</span><span>Subscriptions</span></a>
+      <a class="nav-link {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}"><span class="nav-icon">✓</span><span>Approvals</span></a>
+      <a class="nav-link {% if request.endpoint == 'people' %}active{% endif %}" href="{{ url_for('people') }}"><span class="nav-icon">♙</span><span>People</span></a>
       <a class="nav-link {% if request.endpoint == 'categories' %}active{% endif %}" href="{{ url_for('categories') }}"><span class="nav-icon">◈</span><span>Categories</span></a>
+      {% if current_member and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'cashback_schemes' %}active{% endif %}" href="{{ url_for('cashback_schemes') }}"><span class="nav-icon">%</span><span>Cashback schemes</span></a>{% endif %}
     </nav>
     <div class="sidebar-bottom">
       <div class="privacy-note"><span class="privacy-dot"></span><span><strong>Your money, your view</strong><small>Private by design</small></span></div>
@@ -38,7 +44,7 @@
         <button type="button" class="theme-dot violet" data-theme-choice="violet" aria-label="Violet theme"></button>
         <button type="button" class="theme-dot peach" data-theme-choice="peach" aria-label="Peach theme"></button>
       </div>
-      <a class="avatar" href="{{ url_for('categories') }}" aria-label="Categories and settings">S</a>
+      <a class="avatar" href="{{ url_for('people') }}" aria-label="Family member settings">{{ current_member.name[:1]|upper if current_member else 'S' }}</a>
     </header>
     <div class="page-content">
       {% with messages = get_flashed_messages(with_categories=true) %}
