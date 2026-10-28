@@ -14,7 +14,7 @@
 <body>
 <div class="app-shell">
   <aside class="sidebar">
-    <a class="brand" href="{{ url_for('dashboard') }}"><span class="brand-mark">s<span>.</span></span><span><strong>samruddhi</strong><small>PERSONAL FINANCE</small></span></a>
+    <a class="brand" href="{{ url_for('dashboard') }}"><img class="brand-mark-image" src="{{ url_for('static', filename='favicon.svg') }}?v=20261028-gold-mark" alt=""><span><strong>samruddhi</strong><small>PERSONAL FINANCE</small></span></a>
     <div class="side-label">YOUR MONEY</div>
     <nav class="nav-list">
       <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span class="nav-icon">⌂</span><span>Overview</span></a>
@@ -38,7 +38,7 @@
   </aside>
   <main class="main-area">
     <header class="topbar">
-      <a class="mobile-brand" href="{{ url_for('dashboard') }}"><span class="brand-mark">s<span>.</span></span><strong>samruddhi</strong></a>
+      <a class="mobile-brand" href="{{ url_for('dashboard') }}"><img class="brand-mark-image mobile-brand-mark" src="{{ url_for('static', filename='favicon.svg') }}?v=20261028-gold-mark" alt=""><strong>samruddhi</strong></a>
       <div class="topbar-spacer"></div>
       <div class="theme-picker" aria-label="Choose colour theme">
         <button type="button" class="theme-dot mint" data-theme-choice="mint" aria-label="Mint theme"></button>
