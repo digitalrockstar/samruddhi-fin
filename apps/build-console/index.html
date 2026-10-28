@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Samruddhi Fin Build Console</title>
+<style>body{font:16px system-ui;margin:2rem;max-width:1000px}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #bbb;padding:.5rem;text-align:left}</style>
+<h1>Samruddhi Fin Build Console</h1><p id="updated">Loading persisted state…</p><h2>Tasks</h2><div id="tasks"></div><h2>Codex runs</h2><div id="agents"></div><h2>Verification runs</h2><div id="verification"></div>
+<script>const table=(rows,cols)=>rows.length?`<table><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${r[c]??''}</td>`).join('')}</tr>`).join('')}</table>`:'No persisted records.';async function load(){const s=await fetch('/api/state').then(r=>r.json());tasks.innerHTML=table(s.tasks,['id','title','status','updated_at','blocker']);agents.innerHTML=table(s.agent_runs,['id','status','exit_code','started_at','ended_at','output_artifact']);verification.innerHTML=table(s.verification_runs,['id','result','exit_code','counts_json','output_artifact']);updated.textContent='Persisted state refreshed '+new Date().toLocaleTimeString();}load();setInterval(load,2000);</script>
+</html>
