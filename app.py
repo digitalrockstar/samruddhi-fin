@@ -47,6 +47,7 @@ class Account(db.Model):
     account_type = db.Column(db.String(20), nullable=False, default="bank")
     opening_balance_paise = db.Column(db.Integer, nullable=False, default=0)
     colour = db.Column(db.String(7), nullable=False, default="#7297d2")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
 
 
@@ -372,6 +373,7 @@ def ensure_additive_schema() -> None:
     table_names = set(inspector.get_table_names())
     changes = [
         ("family_member", "username", "VARCHAR(64)"),
+        ("account", "is_active", "BOOLEAN NOT NULL DEFAULT TRUE"),
         ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
         ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
@@ -929,6 +931,29 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def accounts():
         if request.method == "POST":
+            if request.form.get("action") == "update_account":
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                if not current_app.config.get("TESTING") and (not actor or actor.role != "admin" or actor.username != "akshayp"):
+                    abort(403)
+                try:
+                    account_id = int(request.form.get("account_id", ""))
+                    account = db.session.get(Account, account_id) or abort(404)
+                    name = request.form.get("name", "").strip()[:80]
+                    kind = request.form.get("account_type", "")
+                    opening = money_to_paise(request.form.get("opening_balance", "0"), allow_zero=True)
+                    colour = normalized_colour(request.form.get("colour"))
+                    duplicate = Account.query.filter(func.lower(Account.name) == name.lower(), Account.id != account.id).first()
+                    if not name or duplicate or kind not in ACCOUNT_TYPES:
+                        raise ValueError("Enter a unique account name and valid account type.")
+                    account.name, account.account_type = name, kind
+                    account.opening_balance_paise, account.colour = opening, colour
+                    db.session.commit()
+                    flash("Account updated.", "success")
+                    return redirect(url_for("accounts"))
+                except (ValueError, TypeError) as exc:
+                    db.session.rollback()
+                    flash(str(exc) or "Check the account details.", "error")
+                    return redirect(url_for("accounts"))
             if request.form.get("action") == "save_account_meta":
                 actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
                 if not current_app.config.get("TESTING") and (
@@ -977,10 +1002,22 @@ def create_app(test_config: dict | None = None) -> Flask:
             except (ValueError, TypeError) as exc:
                 db.session.rollback()
                 flash(str(exc) or "Check the account details.", "error")
-        account_list = Account.query.order_by(Account.name).all()
+        account_list = Account.query.filter_by(is_active=True).order_by(Account.name).all()
         rows = current_app.extensions["family_finance"]["enrich_account_rows"](balances_for_accounts(account_list))
         return render_template("accounts.html", rows=rows,
             people=current_app.extensions["family_finance"]["active_members"]())
+
+    @app.post("/accounts/<int:account_id>/toggle")
+    @login_required
+    def toggle_account(account_id):
+        actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+        if not current_app.config.get("TESTING") and (not actor or actor.role != "admin" or actor.username != "akshayp"):
+            abort(403)
+        account = db.session.get(Account, account_id) or abort(404)
+        account.is_active = not account.is_active
+        db.session.commit()
+        flash("Account archived." if not account.is_active else "Account restored.", "success")
+        return redirect(url_for("accounts"))
 
     @app.route("/categories", methods=["GET", "POST"])
     @login_required
