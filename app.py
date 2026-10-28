@@ -6,7 +6,7 @@ import json
 import os
 import re
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from functools import wraps
 from typing import Any
@@ -34,13 +34,18 @@ KINDS = {"income", "expense", "transfer"}
 COLOUR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+def utcnow_naive() -> datetime:
+    """Return UTC time as a naive value for consistent SQLite DateTime round-trips."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class Account(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     account_type = db.Column(db.String(20), nullable=False, default="bank")
     opening_balance_paise = db.Column(db.Integer, nullable=False, default=0)
     colour = db.Column(db.String(7), nullable=False, default="#7297d2")
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
 
 
 class Category(db.Model):
@@ -61,7 +66,7 @@ class Transaction(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=True)
     transfer_to_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True, index=True)
     notes = db.Column(db.String(500), nullable=False, default="")
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
 
     account = db.relationship("Account", foreign_keys=[account_id])
     transfer_to = db.relationship("Account", foreign_keys=[transfer_to_account_id])
@@ -71,7 +76,7 @@ class Transaction(db.Model):
 class ImportBatch(db.Model):
     id = db.Column(db.String(40), primary_key=True)
     rows_json = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
     consumed = db.Column(db.Boolean, nullable=False, default=False)
 
 
@@ -406,7 +411,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         if request.method == "POST" and request.form.get("action") == "confirm":
             batch_id = session.pop("import_batch_id", None)
             batch = db.session.get(ImportBatch, batch_id) if batch_id else None
-            if not batch or batch.consumed or datetime.utcnow() - batch.created_at > timedelta(hours=1):
+            if not batch or batch.consumed or utcnow_naive() - batch.created_at > timedelta(hours=1):
                 flash("That preview expired. Please upload the CSV again.", "error")
                 return redirect(url_for("import_csv"))
             rows = json.loads(batch.rows_json)
@@ -480,7 +485,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                         row["duplicate"] = False
                     rows.append(row)
                 batch_id = secrets.token_urlsafe(18)
-                db.session.add(ImportBatch(id=batch_id, rows_json=json.dumps(rows), created_at=datetime.utcnow()))
+                db.session.add(ImportBatch(id=batch_id, rows_json=json.dumps(rows), created_at=utcnow_naive()))
                 db.session.commit()
                 session["import_batch_id"] = batch_id
                 return render_template("import.html", rows=rows, preview=True)
