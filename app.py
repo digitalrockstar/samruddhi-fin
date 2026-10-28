@@ -185,9 +185,15 @@ class Goal(db.Model):
     member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
     target_paise = db.Column(db.Integer, nullable=False)
     target_date = db.Column(db.Date, nullable=True)
+    monthly_contribution_paise = db.Column(db.Integer, nullable=False, default=0)
+    contribution_source_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    contribution_destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    next_contribution_date = db.Column(db.Date, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
     member = db.relationship("FamilyMember")
+    contribution_source = db.relationship("Account", foreign_keys=[contribution_source_account_id])
+    contribution_destination = db.relationship("Account", foreign_keys=[contribution_destination_account_id])
 
 
 class GoalEarmark(db.Model):
@@ -374,6 +380,10 @@ def ensure_additive_schema() -> None:
     changes = [
         ("family_member", "username", "VARCHAR(64)"),
         ("account", "is_active", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        ("goal", "monthly_contribution_paise", "INTEGER NOT NULL DEFAULT 0"),
+        ("goal", "contribution_source_account_id", "INTEGER REFERENCES account(id)"),
+        ("goal", "contribution_destination_account_id", "INTEGER REFERENCES account(id)"),
+        ("goal", "next_contribution_date", "DATE"),
         ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
         ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
