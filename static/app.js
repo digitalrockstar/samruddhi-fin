@@ -1,6 +1,6 @@
 (() => {
   const root = document.documentElement;
-  const availableThemes = ["mint", "blue", "violet", "peach"];
+  const availableThemes = ["mint", "blue", "violet", "peach", "dark"];
   const applyTheme = (theme) => {
     if (!availableThemes.includes(theme)) return;
     root.setAttribute("data-theme", theme);
