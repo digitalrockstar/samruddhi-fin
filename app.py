@@ -322,7 +322,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         item.is_archived = True
         db.session.commit()
         flash("Transaction archived. You can restore it from Archived transactions.", "success")
-        return redirect(url_for("transactions"))
+        return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m"))
 
     @app.post("/transactions/<int:transaction_id>/restore")
     @login_required
@@ -331,7 +331,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         item.is_archived = False
         db.session.commit()
         flash("Transaction restored.", "success")
-        return redirect(url_for("transactions", archived="1"))
+        return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m"))
 
     def balances_for_accounts(accounts: list[Account]) -> list[dict[str, Any]]:
         output = []
