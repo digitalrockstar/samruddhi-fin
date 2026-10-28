@@ -474,8 +474,8 @@ def register_family_routes(app, db, models, helpers):
     def save_category(name, kind, colour, parent_id=None):
         if not name:
             raise ValueError("Enter a category name.")
-        if kind not in {"income", "expense"}:
-            raise ValueError("Choose income or expense.")
+        if kind not in {"income", "expense", "transfer"}:
+            raise ValueError("Choose income, expense or transfer.")
         if Category.query.filter(func.lower(Category.name) == name.lower()).first():
             raise ValueError("That category already exists.")
         parent = db.session.get(Category, int(parent_id)) if parent_id else None
