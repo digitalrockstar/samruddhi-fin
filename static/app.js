@@ -28,6 +28,14 @@
     form.querySelectorAll('input[name="kind"]').forEach((input) => input.addEventListener("change", updateKind));
     updateKind();
   }
+  document.querySelectorAll(".cc-config-form").forEach((configForm) => {
+    const select = configForm.querySelector("[data-limit-mode]");
+    const updateLimitMode = () => {
+      configForm.dataset.mode = select?.value === "shared" ? "shared" : "individual";
+    };
+    select?.addEventListener("change", updateLimitMode);
+    updateLimitMode();
+  });
   document.querySelectorAll("form[data-confirm]").forEach((formElement) => {
     formElement.addEventListener("submit", (event) => {
       if (!window.confirm(formElement.dataset.confirm)) event.preventDefault();
