@@ -870,7 +870,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 return redirect(url_for("categories"))
         rows = current_app.extensions["family_finance"]["enrich_categories"](
             Category.query.order_by(Category.kind, Category.name).all())
-        parents = Category.query.order_by(Category.kind, Category.name).all()
+        subcategory_ids = {row.subcategory_id for row in CategoryParent.query.all()}
+        parents = [row for row in Category.query.order_by(Category.kind, Category.name).all()
+                   if row.id not in subcategory_ids]
         return render_template("categories.html", categories=rows, parents=parents)
 
     @app.get("/export.csv")
