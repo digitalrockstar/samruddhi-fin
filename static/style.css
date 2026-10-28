@@ -658,3 +658,6 @@ details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margi
 
 /* Accounts page: keep cards to two columns on wide/landscape layouts. */
 @media(min-width:1200px){.account-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Accounts create form now lives in a dialog, so let the two-card grid use the full page width. */
+@media(min-width:1200px){.page-content>.accounts-layout{grid-template-columns:minmax(0,1fr)}.page-content>.accounts-layout>.account-cards{grid-column:1/-1;width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}}
