@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f7f2">
+  <script>try{const t=localStorage.getItem("samruddhi-theme");if(["mint","blue","violet","peach","dark"].includes(t))document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
   <title>{% block title %}Overview{% endblock %} · Samruddhi Finance</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -64,32 +65,8 @@
     </footer>
   </main>
 </div>
-<script src="{{ url_for('static', filename='app.js') }}?v=20261028-grid-themefix2" defer></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=20261028-darktheme2" defer></script>
 
-<script>
-(() => {
-  const themes = ["mint", "blue", "violet", "peach", "dark"];
-  const apply = (theme) => {
-    if (!themes.includes(theme)) return;
-    document.documentElement.setAttribute("data-theme", theme);
-    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-      const active = button.dataset.themeChoice === theme;
-      button.classList.toggle("is-selected", active);
-      button.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-    try { localStorage.setItem("samruddhi-theme", theme); } catch (e) {}
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = ({mint:"#f4f7f2",blue:"#f3f6fb",violet:"#f7f4fb",peach:"#fbf5ef",dark:"#171b1a"})[theme];
-  };
-  let saved = "mint";
-  try { saved = localStorage.getItem("samruddhi-theme") || "mint"; } catch (e) {}
-  apply(saved);
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-theme-choice]");
-    if (button) apply(button.dataset.themeChoice);
-  });
-})();
-</script>
 
 </body>
 </html>
