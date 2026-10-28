@@ -126,3 +126,29 @@
   .goals-panel .panel-heading { margin-bottom: 16px; }
   .panel:has(> .finance-card-grid) > .empty-state { padding: 14px; }
 }
+
+
+/* Data reset and single-row action polish */
+.data-reset-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.data-reset-card{min-width:0;padding:clamp(18px,2.2vw,28px)}
+.data-reset-card .panel-heading{margin-bottom:18px}
+.reset-preview{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:18px 0;background:var(--surface-soft,rgba(120,140,120,.06))}
+.reset-preview ul{list-style:none;padding:0;margin:12px 0 0}
+.reset-preview li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.reset-preview li:last-child{border-bottom:0}
+.reset-confirm-form{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.reset-safety-note{margin-top:20px;padding:20px 24px}
+.button.danger{background:#a94444;color:#fff;border-color:#a94444}
+.ui-icon{display:block;width:18px;height:18px;flex:0 0 18px}
+.icon-button,.mobile-add{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;flex:0 0 auto}
+.row-actions,.inline-icon-actions,.record-actions,.finance-card-actions{display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:6px;white-space:nowrap}
+.row-actions form,.inline-icon-actions form,.record-actions form,.finance-card-actions form{display:inline-flex;flex:0 0 auto;margin:0}
+.finance-card>details{display:inline-block;vertical-align:middle;margin:8px 6px 0 0}
+.finance-card>form.record-actions{display:inline-flex;vertical-align:middle;margin-top:8px}
+.simple-row{display:flex;align-items:center;gap:12px}
+.simple-row>form{display:inline-flex;flex:0 0 auto;margin-left:auto}
+.nav-icon .ui-icon{width:19px;height:19px}
+.feature-icon .ui-icon{width:24px;height:24px}
+.txn-icon .ui-icon{width:18px;height:18px}
+@media(max-width:850px){.data-reset-layout{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:680px){.data-reset-card{padding:16px}.reset-safety-note{padding:16px}.row-actions,.inline-icon-actions,.record-actions,.finance-card-actions{gap:4px}.icon-button{width:36px;height:36px;min-width:36px}}

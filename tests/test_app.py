@@ -1,6 +1,6 @@
 import io
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -680,3 +680,89 @@ def test_legacy_transaction_metadata_backfill_is_idempotent(tmp_path):
         assert TransactionMetadata.query.filter_by(transaction_id=transaction_id).count() == 1
         db.session.remove()
         db.drop_all()
+
+
+
+def test_data_reset_preview_backup_and_reset_since_preserves_older_activity(client, app):
+    with app.app_context():
+        account = Account.query.filter_by(name="Main bank").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        older = Transaction(
+            transaction_date=date.today() - timedelta(days=10), kind="expense", amount_paise=1200,
+            description="Older expense", account_id=account.id, category_id=category.id,
+            created_at=datetime(2026, 1, 1, 10, 0, 0))
+        newer = Transaction(
+            transaction_date=date.today() - timedelta(days=30), kind="expense", amount_paise=2300,
+            description="Newly entered historical expense", account_id=account.id, category_id=category.id,
+            created_at=datetime(2026, 10, 28, 10, 0, 0))
+        db.session.add_all([older, newer])
+        db.session.commit()
+        older_id, newer_id, account_id = older.id, newer.id, account.id
+
+    backup = client.get("/settings/data-reset/backup")
+    assert backup.status_code == 200
+    assert backup.mimetype == "application/json"
+    assert b"password_hash" not in backup.data
+    assert b"Newly entered historical expense" in backup.data
+
+    # The cutoff is supplied as India-local time; this maps to 2026-10-28 04:30 UTC.
+    preview = client.get("/settings?mode=since&cutoff=2026-10-28T10%3A00")
+    assert preview.status_code == 200
+    assert b"Reset activity since cutoff" in preview.data
+
+    response = post_form(client, "/settings/data-reset", {
+        "mode": "since", "cutoff": "2026-10-28T10:00", "backup_confirmed": "1",
+        "confirmation": "RESET SINCE",
+    }, follow_redirects=True, token_path="/settings")
+    assert response.status_code == 200
+    assert b"Financial activity created since the selected IST time was reset" in response.data
+    with app.app_context():
+        assert db.session.get(Transaction, older_id) is not None
+        assert db.session.get(Transaction, newer_id) is None
+        assert db.session.get(Account, account_id) is not None
+
+
+def test_full_data_reset_can_preserve_setup_or_remove_it(client, app):
+    with app.app_context():
+        account = Account.query.filter_by(name="Main bank").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        txn = Transaction(transaction_date=date.today(), kind="expense", amount_paise=1000,
+            description="Reset candidate", account_id=account.id, category_id=category.id)
+        db.session.add(txn)
+        db.session.commit()
+        account_id = account.id
+        txn_id = txn.id
+
+    response = post_form(client, "/settings/data-reset", {
+        "mode": "full", "preserve_setup": "1", "backup_confirmed": "1", "confirmation": "RESET ALL",
+    }, follow_redirects=True, token_path="/settings")
+    assert response.status_code == 200
+    with app.app_context():
+        assert db.session.get(Transaction, txn_id) is None
+        assert db.session.get(Account, account_id) is not None
+
+    # A second full reset without preserving setup removes accounts as well.
+    response = post_form(client, "/settings/data-reset", {
+        "mode": "full", "backup_confirmed": "1", "confirmation": "RESET ALL",
+    }, follow_redirects=True, token_path="/settings")
+    assert response.status_code == 200
+    with app.app_context():
+        assert Account.query.count() == 0
+        assert Category.query.count() > 0
+
+
+def test_data_reset_rejects_missing_confirmation_without_mutation(client, app):
+    with app.app_context():
+        account = Account.query.filter_by(name="Main bank").one()
+        txn = Transaction(transaction_date=date.today(), kind="expense", amount_paise=1000,
+            description="Must remain", account_id=account.id)
+        db.session.add(txn)
+        db.session.commit()
+        txn_id = txn.id
+    response = post_form(client, "/settings/data-reset", {
+        "mode": "full", "backup_confirmed": "1", "confirmation": "wrong phrase",
+    }, follow_redirects=True, token_path="/settings")
+    assert response.status_code == 200
+    assert b"confirmation phrase did not match" in response.data
+    with app.app_context():
+        assert db.session.get(Transaction, txn_id) is not None
