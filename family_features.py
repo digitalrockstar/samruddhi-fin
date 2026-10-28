@@ -41,7 +41,7 @@ def register_family_routes(app, db, models, helpers):
     login_required = helpers["login_required"]
 
     PURPOSE_TAGS = {
-        "daily": "Daily expenses", "credit": "Credit", "savings": "Savings",
+        "expense": "Expenses", "daily": "Daily expenses", "credit": "Credit card", "savings": "Savings",
         "emergency": "Emergency fund", "investment": "Investment", "wallet": "Wallet",
         "bills": "Bills and subscriptions",
     }
