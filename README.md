@@ -13,6 +13,7 @@ The `_legacy/` tree and `secrets/` are off-limits. Do not read or print secrets,
 - CSV preview/import with validation and duplicate detection; CSV export.
 - Responsive desktop/mobile layout and four browser-persisted colour themes.
 - Amounts stored as integer paise; transfers excluded from income/expense totals and moved between account balances. Credit-card purchases and payments adjust the amount owed.
+- Credit-card management: configurable individual or shared limits, shared-limit utilization, billing statements, total/minimum due, linked payments, and in-app reminders two days before and on the due date (overdue statements stay visible until paid).
 - Optional single-password access gate via environment variables.
 
 ## Run on Windows PowerShell
@@ -35,6 +36,14 @@ Optional environment variables:
 - `HOST` — defaults to 127.0.0.1. Set to 0.0.0.0 only in an appropriately protected hosting environment.
 
 For a hosted deployment, set both `SECRET_KEY` and `APP_PASSWORD`, use private database credentials, and configure the database as private. This is a single-user password gate, not a full multi-user identity system.
+
+## Credit cards and reminders
+
+Create credit card accounts under **Accounts**, then configure each card under **Credit cards**. A card can have its own limit or belong to a shared limit group; shared utilization and available credit are aggregated across linked cards without counting the group's limit more than once.
+
+Add the statement month, statement date, due date, total due and minimum due from the issuer's statement. Recording a payment here creates a bank/cash/savings-to-card transfer and links it to that statement. Payment amounts are reflected in the statement balance only while their linked transaction is active; archiving/restoring the transfer consequently removes/restores the applied payment. Linked payments are managed through the Credit Cards page to avoid breaking their statement association.
+
+In-app reminders appear when the app is opened two days before a statement is due, on the due date, and on subsequent days after the due date while an amount remains unpaid. The app does not currently send background push notifications, email or Telegram messages; those channels can be added separately later. Statement dates are recorded from the actual issuer statement, while the configured statement/due day values serve as card-cycle reference settings.
 
 ## CSV format
 
