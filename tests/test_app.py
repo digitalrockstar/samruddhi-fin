@@ -509,8 +509,9 @@ def test_cashback_to_card_reduces_owed_balance_and_is_not_regular_income(app, cl
         "event_id": str(event_id), "action": "approve", "actual_amount": "100.00",
     }, follow_redirects=True)
     assert response.status_code == 200
-    assert b"Cashback received" in response.data
-    assert b"Money in" in response.data
+    dashboard = client.get("/")
+    assert b"Cashback received" in dashboard.data
+    assert b"Money in" in dashboard.data
     with app.app_context():
         card = db.session.get(Account, card_id)
         assert card.opening_balance_paise == 0
