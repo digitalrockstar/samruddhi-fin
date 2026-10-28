@@ -22,7 +22,15 @@
 {% endfor %}</div>{% else %}<div class="panel empty-state"><span class="empty-icon">▣</span><strong>No credit card accounts yet</strong><p>Add a credit-card account under Accounts, then configure its limit here.</p><a class="button primary" href="{{ url_for('accounts') }}">Go to accounts</a></div>{% endif %}</section>
 <section class="cc-lower-grid">
 <article class="panel cc-group-panel"><div class="panel-heading"><div><h2>Shared limit groups</h2><p>One bank-approved limit shared by two or more cards.</p></div></div>
-{% if groups %}<div class="cc-group-list">{% for group in groups %}<div class="cc-group-item"><span><strong>{{ group.name }}</strong><small>{% set linked_count = namespace(value=0) %}{% for card_row in cards %}{% if card_row.group and card_row.group.id == group.id %}{% set linked_count.value = linked_count.value + 1 %}{% endif %}{% endfor %}{{ linked_count.value }} linked card(s)</small></span><strong>{{ money(group.limit_paise) }}</strong></div>{% endfor %}</div>{% else %}<p class="cc-muted">No shared groups yet. Create one when your bank provides a combined limit.</p>{% endif %}
+{% if groups %}<div class="cc-group-list">{% for group in groups %}
+<div class="cc-group-edit-card">
+  <div class="cc-group-item"><span><strong>{{ group.name }}</strong><small>{% set linked_count = namespace(value=0) %}{% for card_row in cards %}{% if card_row.group and card_row.group.id == group.id %}{% set linked_count.value = linked_count.value + 1 %}{% endif %}{% endfor %}{{ linked_count.value }} linked card(s)</small></span><strong>{{ money(group.limit_paise) }}</strong></div>
+  <form method="post" class="cc-group-edit"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update_group"><input type="hidden" name="group_id" value="{{ group.id }}">
+    <label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" value="{{ group.name }}" required></label>
+    <label class="field"><span>SHARED LIMIT (₹)</span><input name="group_limit" type="number" min="0.01" step="0.01" value="{{ '%.2f'|format(group.limit_paise / 100) }}" required></label>
+    <button class="button outline" type="submit">Update</button>
+  </form>
+</div>{% endfor %}</div>{% else %}<p class="cc-muted">No shared groups yet. Create one when your bank provides a combined limit.</p>{% endif %}
 <form method="post" class="stack-form cc-group-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create_group"><label class="field"><span>GROUP NAME</span><input name="group_name" maxlength="80" placeholder="e.g. Household shared limit" required></label><label class="field"><span>SHARED CREDIT LIMIT (₹)</span><input name="group_limit" type="number" min="0.01" step="0.01" placeholder="e.g. 200000" required></label><button class="button primary full-button" type="submit">＋ Create shared group</button></form></article>
 <article class="panel cc-statement-form" id="new-statement"><div class="panel-heading"><div><h2>Add statement</h2><p>Record the bank-issued statement amount and payment deadline.</p></div></div>
 {% if cards %}<form method="post" class="stack-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save_statement">
