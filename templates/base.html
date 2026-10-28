@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}?v=20261028-gold-mark">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261028-grid-themefix2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20261028-darktheme1">
 </head>
 <body>
 <div class="app-shell">
@@ -45,6 +45,7 @@
         <button type="button" class="theme-dot blue" data-theme-choice="blue" aria-label="Blue theme"></button>
         <button type="button" class="theme-dot violet" data-theme-choice="violet" aria-label="Violet theme"></button>
         <button type="button" class="theme-dot peach" data-theme-choice="peach" aria-label="Peach theme"></button>
+        <button type="button" class="theme-dot dark" data-theme-choice="dark" aria-label="Dark theme" title="Dark theme"></button>
       </div>
       <a class="avatar" href="{{ url_for('change_password') }}" aria-label="Change password" title="Change password">{{ current_member.name[:1]|upper if current_member else 'S' }}</a>
     </header>
@@ -67,7 +68,7 @@
 
 <script>
 (() => {
-  const themes = ["mint", "blue", "violet", "peach"];
+  const themes = ["mint", "blue", "violet", "peach", "dark"];
   const apply = (theme) => {
     if (!themes.includes(theme)) return;
     document.documentElement.setAttribute("data-theme", theme);
@@ -78,7 +79,7 @@
     });
     try { localStorage.setItem("samruddhi-theme", theme); } catch (e) {}
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = ({mint:"#f4f7f2",blue:"#f3f6fb",violet:"#f7f4fb",peach:"#fbf5ef"})[theme];
+    if (meta) meta.content = ({mint:"#f4f7f2",blue:"#f3f6fb",violet:"#f7f4fb",peach:"#fbf5ef",dark:"#171b1a"})[theme];
   };
   let saved = "mint";
   try { saved = localStorage.getItem("samruddhi-theme") || "mint"; } catch (e) {}
