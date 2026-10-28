@@ -909,8 +909,45 @@ def register_family_routes(app, db, models, helpers):
             db.session.rollback()
             current_app.logger.exception("Unable to materialize due subscription transactions")
 
+    def decorate_transactions(items):
+        owner_rows = {row.account_id: row for row in AccountOwner.query.all()}
+        child_parents = {row.subcategory_id: row.parent for row in CategoryParent.query.all()}
+        for item in items:
+            owner = owner_rows.get(item.account_id)
+            item.payer_name = owner.member.name if owner and owner.member_id and owner.member else (
+                "Family" if owner is None or owner.member_id is None else "Unassigned")
+            parent = child_parents.get(item.category_id)
+            item.category_display_name = f"{parent.name} › {item.category.name}" if parent and item.category else (
+                item.category.name if item.category else item.kind.title())
+            meta = db.session.get(TransactionMetadata, item.id)
+            if meta and meta.budget_id and meta.budget:
+                owner_label = "Family" if meta.budget.owner_type == "family" else (
+                    meta.budget.member.name if meta.budget.member else "Individual")
+                item.budget_label = f"{owner_label} budget · {meta.budget.name}"
+            elif meta:
+                item.budget_label = "Family context" if meta.budget_scope == "family" else "Individual context"
+            else:
+                item.budget_label = ""
+            item.beneficiary_names = [row.member.name for row in TransactionBeneficiary.query.filter_by(
+                transaction_id=item.id).all() if row.member]
+            item.is_subscription = bool(
+                Subscription.query.filter_by(created_from_transaction_id=item.id).first()
+                or SubscriptionOccurrence.query.filter_by(transaction_id=item.id).first())
+            event = CashbackEvent.query.filter_by(transaction_id=item.id).first()
+            posted_event = CashbackEvent.query.filter_by(posted_transaction_id=item.id).first()
+            if posted_event:
+                item.cashback_label = "Cashback credit"
+            elif event and event.status == "approved":
+                item.cashback_label = f"Cashback approved · {format_money(event.actual_paise or event.expected_paise)}"
+            elif event and event.status in {"scheduled", "pending_approval", "not_received"}:
+                item.cashback_label = f"Cashback {event.status.replace('_', ' ')} · {format_money(event.expected_paise)}"
+            else:
+                item.cashback_label = ""
+        return items
+
     app.extensions["family_finance"] = {
         "active_members": active_members,
+        "decorate_transactions": decorate_transactions,
         "save_transaction_extras": save_transaction_extras,
         "transaction_form_context": transaction_form_context,
         "transaction_edit_guard": transaction_edit_guard,
