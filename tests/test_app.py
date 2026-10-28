@@ -135,7 +135,12 @@ def test_csv_export_and_preview_confirmation(client, app):
     response = post_form(client, "/import", {"action": "confirm"}, token_path="/import", follow_redirects=True)
     assert response.status_code == 200
     with app.app_context():
-        assert Transaction.query.filter_by(description="Tea").one().amount_paise == 4550
+        imported = Transaction.query.filter_by(description="Tea").one()
+        assert imported.amount_paise == 4550
+        imported_meta = db.session.get(TransactionMetadata, imported.id)
+        assert imported_meta.source == "import"
+        assert imported_meta.budget_scope == "family"
+        assert imported_meta.payer_snapshot_set is True
 
 
 def test_post_without_csrf_is_rejected(client):
@@ -164,6 +169,29 @@ def test_individual_authentication_setup_and_login(tmp_path):
     }, follow_redirects=True)
     assert response.status_code == 200
     assert b"Net cash flow" in response.data
+
+    password_token = token(client, "/change-password")
+    response = client.post("/change-password", data={
+        "_csrf_token": password_token,
+        "old_password": "a-strong-test-password",
+        "new_password": "a-new-strong-test-password",
+        "confirm_password": "a-new-strong-test-password",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Password changed successfully" in response.data
+    client.post("/logout", data={"_csrf_token": token(client, "/")})
+    old_token = token(client, "/login")
+    response = client.post("/login", data={
+        "_csrf_token": old_token, "email": "admin@example.test", "password": "a-strong-test-password",
+    })
+    assert b"did not match" in response.data
+    new_token = token(client, "/login")
+    response = client.post("/login", data={
+        "_csrf_token": new_token, "email": "admin@example.test", "password": "a-new-strong-test-password",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Net cash flow" in response.data
+
     bad_client = application.test_client()
     bad_token = token(bad_client, "/login")
     response = bad_client.post("/login", data={
