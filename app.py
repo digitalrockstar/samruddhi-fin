@@ -13,7 +13,7 @@ from typing import Any
 
 from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, or_
+from sqlalchemy import UniqueConstraint, func, or_
 
 db = SQLAlchemy()
 
@@ -81,7 +81,51 @@ class ImportBatch(db.Model):
     consumed = db.Column(db.Boolean, nullable=False, default=False)
 
 
-def money_to_paise(value: Any, *, allow_zero: bool = False) -> int:
+class CreditLimitGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    limit_paise = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+
+
+class CreditCardProfile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), unique=True, nullable=False, index=True)
+    limit_mode = db.Column(db.String(12), nullable=False, default="individual")
+    individual_limit_paise = db.Column(db.Integer, nullable=True)
+    shared_group_id = db.Column(db.Integer, db.ForeignKey("credit_limit_group.id"), nullable=True, index=True)
+    statement_day = db.Column(db.Integer, nullable=False, default=1)
+    due_day = db.Column(db.Integer, nullable=False, default=20)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    account = db.relationship("Account")
+    shared_group = db.relationship("CreditLimitGroup")
+
+
+class CreditCardStatement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
+    statement_month = db.Column(db.String(7), nullable=False, index=True)
+    statement_date = db.Column(db.Date, nullable=False)
+    due_date = db.Column(db.Date, nullable=False, index=True)
+    total_due_paise = db.Column(db.Integer, nullable=False)
+    minimum_due_paise = db.Column(db.Integer, nullable=False, default=0)
+    notes = db.Column(db.String(500), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    account = db.relationship("Account")
+    __table_args__ = (UniqueConstraint("account_id", "statement_month", name="uq_card_statement_month"),)
+
+
+class StatementPayment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    statement_id = db.Column(db.Integer, db.ForeignKey("credit_card_statement.id"), nullable=False, index=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=False, index=True)
+    amount_paise = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    statement = db.relationship("CreditCardStatement")
+    transaction = db.relationship("Transaction")
+
+
+def money_to_paise(def money_to_paise(value: Any, *, allow_zero: bool = False) -> int:
     """Parse currency without binary floats and store the result as integer paise."""
     try:
         amount = Decimal(str(value).replace(",", "").replace("₹", "").strip())
@@ -235,9 +279,11 @@ def create_app(test_config: dict | None = None) -> Flask:
             "share": round(int(value or 0) * 100 / expense_total) if expense_total else 0}
             for name, colour, value in category_rows]
         accounts = Account.query.order_by(Account.name).all()
+        card_rows, statement_rows, card_reminders, card_metrics = credit_card_overview()
         return render_template("dashboard.html", month=month, income=int(income or 0),
             expenses=expense_total, net=int(income or 0) - expense_total,
-            recent=recent, breakdown=breakdown, accounts=accounts)
+            recent=recent, breakdown=breakdown, accounts=accounts,
+            card_reminders=card_reminders, card_metrics=card_metrics)
 
     @app.get("/transactions")
     @login_required
@@ -313,6 +359,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.route("/transactions/<int:transaction_id>/edit", methods=["GET", "POST"])
     @login_required
     def transaction_edit(transaction_id: int):
+        if StatementPayment.query.filter_by(transaction_id=transaction_id).first():
+            flash("This transfer is linked to a card statement. Manage it from Credit Cards; archive or restore remains available in Transactions.", "error")
+            return redirect(url_for("credit_cards"))
         return save_transaction(db.get_or_404(Transaction, transaction_id))
 
     @app.post("/transactions/<int:transaction_id>/archive")
@@ -353,7 +402,186 @@ def create_app(test_config: dict | None = None) -> Flask:
             output.append({"account": account, "balance": balance, "count": len(txns)})
         return output
 
-    @app.route("/accounts", methods=["GET", "POST"])
+    def credit_card_overview():
+        card_accounts = Account.query.filter_by(account_type="credit").order_by(Account.name).all()
+        balance_rows = balances_for_accounts(card_accounts)
+        balance_by_id = {row["account"].id: row["balance"] for row in balance_rows}
+        profiles = {profile.account_id: profile for profile in CreditCardProfile.query.all()}
+        groups = {group.id: group for group in CreditLimitGroup.query.order_by(CreditLimitGroup.name).all()}
+        group_used = {}
+        for card in card_accounts:
+            profile = profiles.get(card.id)
+            if profile and profile.limit_mode == "shared" and profile.shared_group_id in groups:
+                group_used[profile.shared_group_id] = group_used.get(profile.shared_group_id, 0) + max(int(balance_by_id.get(card.id, 0)), 0)
+
+        card_rows = []
+        total_owed = total_limit = total_available = 0
+        counted_groups = set()
+        for card in card_accounts:
+            profile = profiles.get(card.id)
+            owed = max(int(balance_by_id.get(card.id, 0)), 0)
+            total_owed += owed
+            group = groups.get(profile.shared_group_id) if profile and profile.limit_mode == "shared" else None
+            if profile and profile.limit_mode == "individual":
+                limit, used = int(profile.individual_limit_paise or 0), owed
+                available = max(limit - used, 0)
+                total_limit += limit
+                total_available += available
+                mode_label = "Individual limit"
+            elif profile and group:
+                limit, used = int(group.limit_paise), group_used.get(group.id, 0)
+                available = max(limit - used, 0)
+                mode_label = "Shared limit · " + group.name
+                if group.id not in counted_groups:
+                    total_limit += limit
+                    total_available += available
+                    counted_groups.add(group.id)
+            else:
+                limit = used = available = 0
+                mode_label = "Limit not configured"
+            utilization = round(used * 100 / limit) if limit else 0
+            card_rows.append({"account": card, "profile": profile, "balance": int(balance_by_id.get(card.id, 0)),
+                "owed": owed, "group": group, "limit_paise": limit, "used_paise": used,
+                "available_paise": available, "utilization": utilization,
+                "progress_pct": min(max(utilization, 0), 100), "mode_label": mode_label})
+
+        statement_rows, reminders = [], []
+        today_value = date.today()
+        all_statements = CreditCardStatement.query.order_by(CreditCardStatement.due_date, CreditCardStatement.id).all()
+        for statement in all_statements:
+            paid_value = db.session.query(func.coalesce(func.sum(StatementPayment.amount_paise), 0)).join(
+                Transaction, Transaction.id == StatementPayment.transaction_id
+            ).filter(StatementPayment.statement_id == statement.id, Transaction.is_archived.is_(False)).scalar()
+            paid = min(int(paid_value or 0), int(statement.total_due_paise))
+            remaining = max(int(statement.total_due_paise) - paid, 0)
+            days_until_due = (statement.due_date - today_value).days
+            if remaining == 0:
+                status, reminder_label = "Paid", ""
+            elif days_until_due < 0:
+                status, reminder_label = "Overdue", f"Overdue by {-days_until_due} day(s)"
+            elif days_until_due == 0:
+                status, reminder_label = "Due today", "Payment due today"
+            elif days_until_due == 2:
+                status, reminder_label = "Due in 2 days", "Payment due in 2 days"
+            else:
+                status, reminder_label = "Upcoming", f"Due in {days_until_due} day(s)"
+            row = {"statement": statement, "card": statement.account, "paid_paise": paid,
+                "remaining_paise": remaining, "days_until_due": days_until_due,
+                "status": status, "reminder_label": reminder_label}
+            statement_rows.append(row)
+            if remaining > 0 and (days_until_due == 2 or days_until_due == 0 or days_until_due < 0):
+                reminders.append(row)
+        metrics = {"total_owed_paise": total_owed, "total_limit_paise": total_limit,
+            "available_paise": total_available, "card_count": len(card_accounts),
+            "configured_count": sum(1 for row in card_rows if row["limit_paise"] > 0)}
+        return card_rows, statement_rows, reminders, metrics
+
+    @app.route("/credit-cards", methods=["GET", "POST"])
+    @login_required
+    def credit_cards():
+        if request.method == "POST":
+            action = request.form.get("action", "")
+            try:
+                if action == "create_group":
+                    name = request.form.get("group_name", "").strip()[:80]
+                    limit = money_to_paise(request.form.get("group_limit", ""))
+                    if not name:
+                        raise ValueError("Enter a name for the shared limit group.")
+                    if CreditLimitGroup.query.filter(func.lower(CreditLimitGroup.name) == name.lower()).first():
+                        raise ValueError("A shared limit group with that name already exists.")
+                    db.session.add(CreditLimitGroup(name=name, limit_paise=limit))
+                    db.session.commit()
+                    flash("Shared credit limit group created.", "success")
+                elif action == "save_profile":
+                    account_id = int(request.form.get("account_id", ""))
+                    card = db.session.get(Account, account_id)
+                    if not card or card.account_type != "credit":
+                        raise ValueError("Choose a valid credit card account.")
+                    mode = request.form.get("limit_mode", "individual")
+                    if mode not in {"individual", "shared"}:
+                        raise ValueError("Choose an individual or shared credit limit.")
+                    statement_day = int(request.form.get("statement_day", "1"))
+                    due_day = int(request.form.get("due_day", "20"))
+                    if not 1 <= statement_day <= 28 or not 1 <= due_day <= 28:
+                        raise ValueError("Statement and due days must be between 1 and 28.")
+                    profile = CreditCardProfile.query.filter_by(account_id=card.id).first() or CreditCardProfile(account_id=card.id)
+                    profile.limit_mode, profile.statement_day, profile.due_day = mode, statement_day, due_day
+                    if mode == "individual":
+                        profile.individual_limit_paise = money_to_paise(request.form.get("individual_limit", ""))
+                        profile.shared_group_id = None
+                    else:
+                        group_id = int(request.form.get("shared_group_id", ""))
+                        group = db.session.get(CreditLimitGroup, group_id)
+                        if not group:
+                            raise ValueError("Choose a valid shared credit limit group.")
+                        profile.individual_limit_paise, profile.shared_group_id = None, group.id
+                    db.session.add(profile)
+                    db.session.commit()
+                    flash(f"Credit card details saved for {card.name}.", "success")
+                elif action == "save_statement":
+                    card_id = int(request.form.get("account_id", ""))
+                    card = db.session.get(Account, card_id)
+                    if not card or card.account_type != "credit":
+                        raise ValueError("Choose a valid credit card account.")
+                    statement_month = request.form.get("statement_month", "").strip()
+                    datetime.strptime(statement_month, "%Y-%m")
+                    statement_date = date.fromisoformat(request.form.get("statement_date", ""))
+                    due_date = date.fromisoformat(request.form.get("due_date", ""))
+                    total_due = money_to_paise(request.form.get("total_due", ""))
+                    minimum_due = money_to_paise(request.form.get("minimum_due", "0"), allow_zero=True)
+                    if statement_date.strftime("%Y-%m") != statement_month:
+                        raise ValueError("Statement month must match the statement date.")
+                    if due_date <= statement_date:
+                        raise ValueError("The payment due date must be after the statement date.")
+                    if minimum_due > total_due:
+                        raise ValueError("Minimum amount due cannot exceed the total amount due.")
+                    if CreditCardStatement.query.filter_by(account_id=card.id, statement_month=statement_month).first():
+                        raise ValueError("A statement for this card and month already exists.")
+                    db.session.add(CreditCardStatement(account_id=card.id, statement_month=statement_month,
+                        statement_date=statement_date, due_date=due_date, total_due_paise=total_due,
+                        minimum_due_paise=minimum_due, notes=request.form.get("notes", "").strip()[:500]))
+                    db.session.commit()
+                    flash(f"Statement saved for {card.name}. In-app reminders will appear two days before and on the due date.", "success")
+                elif action == "record_payment":
+                    statement_id = int(request.form.get("statement_id", ""))
+                    statement = db.session.get(CreditCardStatement, statement_id)
+                    if not statement:
+                        raise ValueError("Choose a valid credit card statement.")
+                    source = db.session.get(Account, int(request.form.get("payment_account_id", "")))
+                    if not source or source.id == statement.account_id or source.account_type == "credit":
+                        raise ValueError("Choose a cash, bank, or savings account to pay from.")
+                    already_paid = db.session.query(func.coalesce(func.sum(StatementPayment.amount_paise), 0)).join(
+                        Transaction, Transaction.id == StatementPayment.transaction_id
+                    ).filter(StatementPayment.statement_id == statement.id, Transaction.is_archived.is_(False)).scalar()
+                    remaining = max(int(statement.total_due_paise) - int(already_paid or 0), 0)
+                    amount = money_to_paise(request.form.get("payment_amount", ""))
+                    if remaining <= 0:
+                        raise ValueError("This statement is already fully paid.")
+                    if amount > remaining:
+                        raise ValueError("Payment cannot exceed the remaining statement amount.")
+                    payment_date = date.fromisoformat(request.form.get("payment_date", date.today().isoformat()))
+                    txn = Transaction(transaction_date=payment_date, kind="transfer", amount_paise=amount,
+                        description=f"Credit card payment — {statement.account.name}", account_id=source.id,
+                        transfer_to_account_id=statement.account_id, notes=f"Statement payment for {statement.statement_month}")
+                    db.session.add(txn)
+                    db.session.flush()
+                    db.session.add(StatementPayment(statement_id=statement.id, transaction_id=txn.id, amount_paise=amount))
+                    db.session.commit()
+                    flash("Card statement payment recorded and linked to its bank transfer.", "success")
+                else:
+                    raise ValueError("Choose a valid credit-card action.")
+                return redirect(url_for("credit_cards"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Check the credit-card details.", "error")
+        card_rows, statement_rows, reminders, metrics = credit_card_overview()
+        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"])).order_by(Account.name).all()
+        groups = CreditLimitGroup.query.order_by(CreditLimitGroup.name).all()
+        return render_template("credit_cards.html", cards=card_rows, statements=statement_rows, reminders=reminders,
+            metrics=metrics, groups=groups, payment_accounts=payment_accounts,
+            current_month=date.today().strftime("%Y-%m"), two_days_from_now=(date.today() + timedelta(days=2)).isoformat())
+
+    @app.route("/accounts", methods=["GET", "POST"])    @app.route("/accounts", methods=["GET", "POST"])
     @login_required
     def accounts():
         if request.method == "POST":
