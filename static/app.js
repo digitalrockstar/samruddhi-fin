@@ -317,12 +317,13 @@
     else if (/budget/.test(label)) name = "budget";
     else if (/goal/.test(label)) name = "target";
     else if (/subscription/.test(label)) name = "calendar";
-    else if (/approval|cashback/.test(label)) name = "check";
+    else if (/cashback/.test(label)) name = "rupee";
+    else if (/approval/.test(label)) name = "check";
     else if (/people|member/.test(label)) name = "users";
     else if (/categor/.test(label)) name = "tag";
     else if (/setting/.test(label)) name = "settings";
     else if (/password|security/.test(label)) name = "shield";
-    else if (/more/.test(label)) name = "settings";
+    else if (/more/.test(label)) name = "more";
     renderIcon(el, name);
   });
   document.querySelectorAll(".txn-icon").forEach((el) => {
@@ -332,7 +333,7 @@
   document.querySelectorAll(".account-avatar:not(.large)").forEach((el) => { if (/[↗↘↙↖]/.test(el.textContent)) renderIcon(el, "export"); });
   document.querySelectorAll(".mobile-footer a:not(.mobile-add)").forEach((el) => {
     const label = (el.innerText || "").toLowerCase();
-    const name = label.includes("home") ? "home" : label.includes("activity") ? "activity" : label.includes("budgets") ? "budget" : "settings";
+    const name = label.includes("home") ? "home" : label.includes("activity") ? "activity" : label.includes("account") ? "wallet" : label.includes("more") ? "more" : label.includes("budget") ? "budget" : "settings";
     const span = document.createElement("span"); span.className = "mobile-footer-icon";
     renderIcon(span, name); el.insertBefore(span, el.firstChild);
     if (span.nextSibling?.nodeType === Node.TEXT_NODE) span.nextSibling.textContent = "";
