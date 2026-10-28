@@ -2,8 +2,9 @@
 {% block title %}Accounts{% endblock %}
 {% block content %}
 <section class="page-heading"><div><div class="eyebrow">YOUR MONEY SPACES</div><h1>Accounts</h1><p class="subheading">The owner is the default payer. Purpose tags describe how an account is used.</p></div></section>
+<div class="record-view-toggle"><a class="text-link" href="{{ url_for('accounts', archived=1 if not show_archived else 0) }}">{{ "View active accounts" if show_archived else "View archived accounts" }}</a></div>
 <div class="accounts-layout">
-<div class="record-view-toggle"><a class="text-link" href="{{ url_for('accounts', archived=1 if not show_archived else 0) }}">{{ "View active accounts" if show_archived else "View archived accounts" }}</a></div><section class="account-cards">
+<section class="account-cards">
 {% for row in rows %}
 <article class="account-card panel">
 <div class="account-card-top"><span class="account-avatar large" style="--swatch:{{ row.account.colour }}">{{ row.account.name[:1] }}</span><span class="account-type">{{ row.account.account_type|title }}</span></div>
