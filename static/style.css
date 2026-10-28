@@ -100,3 +100,29 @@
 }
 
 .record-view-toggle{display:flex;justify-content:flex-end;margin:-12px 0 14px;padding:0 2px}.record-edit-form{max-width:100%}details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
+
+
+/* Layout corrections: keep utility links out of grid columns and give empty panels real gutters */
+.accounts-layout { grid-template-columns: minmax(0, 1.5fr) minmax(300px, .85fr); }
+.accounts-layout > .account-cards { grid-column: 1; grid-row: 1; }
+.accounts-layout > .add-account-panel { grid-column: 2; grid-row: 1; }
+.goals-panel { padding: 22px; }
+.goals-panel > .panel-heading { margin-bottom: 22px; }
+.goals-panel .empty-state { margin: 24px auto 12px; padding: 22px; }
+.goals-panel .finance-card-grid { margin-top: 18px; }
+.record-view-toggle { margin: 0 0 16px; }
+.panel > .stack-form, .panel > form { min-width: 0; }
+/* List panels need their own inset even when their list is empty */
+.panel:has(> .finance-card-grid) { padding: 22px; }
+.panel:has(> .finance-card-grid) > .panel-heading { margin-bottom: 20px; }
+.panel:has(> .finance-card-grid) > .finance-card-grid { margin-top: 0; }
+.panel:has(> .finance-card-grid) > .empty-state { margin: 18px auto 8px; padding: 22px; }
+@media (max-width: 900px) {
+  .accounts-layout { grid-template-columns: minmax(0,1fr); }
+  .accounts-layout > .account-cards, .accounts-layout > .add-account-panel { grid-column: 1; grid-row: auto; }
+}
+@media (max-width: 680px) {
+  .goals-panel, .panel:has(> .finance-card-grid) { padding: 16px; }
+  .goals-panel .panel-heading { margin-bottom: 16px; }
+  .panel:has(> .finance-card-grid) > .empty-state { padding: 14px; }
+}
