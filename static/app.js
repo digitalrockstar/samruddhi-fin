@@ -19,9 +19,13 @@
   let savedTheme = "mint";
   try { savedTheme = window.localStorage.getItem("samruddhi-theme") || "mint"; } catch (_) {}
   applyTheme(savedTheme);
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-theme-choice]");
-    if (button) applyTheme(button.dataset.themeChoice);
+  // Bind directly to the static theme controls. This avoids delegated-click
+  // handlers elsewhere in the app swallowing the theme selection event.
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      applyTheme(button.dataset.themeChoice);
+    });
   });
   const form = document.querySelector("#transaction-form");
   if (form) {
