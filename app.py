@@ -395,7 +395,7 @@ def ensure_additive_schema() -> None:
     ]
     columns_by_table = {
         table: {column["name"] for column in inspector.get_columns(table)}
-        for table in table_names if table in {"family_member", "transaction_metadata", "subscription"}
+        for table in table_names if table in {"family_member", "transaction_metadata", "subscription", "account", "goal"}
     }
     for table, column, definition in changes:
         if table in table_names and column not in columns_by_table.get(table, set()):
