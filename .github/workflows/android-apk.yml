@@ -9,6 +9,7 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - 'gradle.properties'
+      - 'templates/base.html'
       - '.github/workflows/android-apk.yml'
 
 permissions:
