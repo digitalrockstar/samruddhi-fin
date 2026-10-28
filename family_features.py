@@ -808,6 +808,8 @@ def register_family_routes(app, db, models, helpers):
                 next_contribution_date = date.fromisoformat(next_raw) if next_raw else None
                 if monthly_amount and (not source_id or not destination_id or source_id == destination_id or not next_contribution_date):
                     raise ValueError("A recurring contribution needs a monthly amount, two different accounts and a next date.")
+                if monthly_amount and any(not db.session.get(Account, aid) or not db.session.get(Account, aid).is_active or db.session.get(Account, aid).account_type == "credit" for aid in (source_id, destination_id)):
+                    raise ValueError("Monthly goal contributions need two active non-credit accounts.")
                 if not name or owner_type not in {"family", "individual"}:
                     raise ValueError("Enter a goal name and valid owner type.")
                 if owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
@@ -868,6 +870,12 @@ def register_family_routes(app, db, models, helpers):
                     target = money_to_paise(request.form.get("target_amount", ""))
                     member_id = int(member_raw) if member_raw else None
                     target_date = date.fromisoformat(target_date_raw) if target_date_raw else None
+                    monthly_raw = request.form.get("monthly_contribution", "").strip()
+                    monthly_amount = money_to_paise(monthly_raw, allow_zero=True) if monthly_raw else 0
+                    source_id = int(request.form.get("contribution_source_account_id")) if request.form.get("contribution_source_account_id", "").strip() else None
+                    destination_id = int(request.form.get("contribution_destination_account_id")) if request.form.get("contribution_destination_account_id", "").strip() else None
+                    next_raw = request.form.get("next_contribution_date", "").strip()
+                    next_contribution_date = date.fromisoformat(next_raw) if next_raw else None
                 except (ValueError, TypeError):
                     flash("Check the target amount, member and date.", "error")
                     return redirect(url_for("goals"))
