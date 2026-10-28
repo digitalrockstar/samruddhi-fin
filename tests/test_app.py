@@ -369,7 +369,7 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     assert response.status_code == 200
     archived_page = client.get("/credit-cards").data
     assert b"<small>Paid</small><strong>\xe2\x82\xb90.00</strong>" in archived_page
-    assert b"<small>Remaining</small><strong>\xe2\x82\xb9100.00</strong>" in archived_page
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb9120.00</strong>" in archived_page
     response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
     assert response.status_code == 200
     restored_page = client.get("/credit-cards").data
