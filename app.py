@@ -31,6 +31,12 @@ DEFAULT_CATEGORIES = [
     ("Salary", "income", "wallet", "#80b895"),
     ("Other income", "income", "trend", "#7297d2"),
 ]
+
+TRANSFER_CATEGORIES = [
+    ("Investment", "transfer", "trending-up", "#a28ac7"),
+    ("CC Payment", "transfer", "credit-card", "#e5a071"),
+    ("Self-Transfer", "transfer", "repeat", "#7297d2"),
+]
 ACCOUNT_TYPES = {"cash", "bank", "savings", "credit", "investment", "other"}
 KINDS = {"income", "expense", "transfer"}
 COLOUR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -505,6 +511,28 @@ def create_app(test_config: dict | None = None) -> Flask:
         ensure_additive_schema()
         ensure_primary_admin()
         seed_defaults()
+        for category_name, category_kind, category_icon, category_colour in TRANSFER_CATEGORIES:
+            existing_category = Category.query.filter(func.lower(Category.name) == category_name.lower()).first()
+            if existing_category is None:
+                db.session.add(Category(
+                    name=category_name, kind=category_kind, icon=category_icon, colour=category_colour))
+        db.session.flush()
+        transfer_categories = {row.name: row for row in Category.query.filter(
+            Category.kind == "transfer", Category.name.in_([item[0] for item in TRANSFER_CATEGORIES])).all()}
+        for legacy_transfer in Transaction.query.filter(
+            Transaction.kind == "transfer", Transaction.category_id.is_(None)).all():
+            source_account = db.session.get(Account, legacy_transfer.account_id)
+            destination_account = db.session.get(Account, legacy_transfer.transfer_to_account_id) if legacy_transfer.transfer_to_account_id else None
+            if destination_account and destination_account.account_type == "credit":
+                category_name = "CC Payment"
+            elif (source_account and source_account.account_type == "investment") or (
+                destination_account and destination_account.account_type == "investment"):
+                category_name = "Investment"
+            else:
+                category_name = "Self-Transfer"
+            inferred_category = transfer_categories.get(category_name)
+            if inferred_category:
+                legacy_transfer.category_id = inferred_category.id
         # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
         # They remain in the shared family context until an existing transaction is edited.
         known_metadata_ids = {row[0] for row in db.session.query(TransactionMetadata.transaction_id).all()}
@@ -595,12 +623,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             "share": round(int(value or 0) * 100 / expense_total) if expense_total else 0}
             for name, colour, value in category_rows]
         accounts = Account.query.filter_by(is_active=True).order_by(Account.name).all()
-        card_rows, statement_rows, card_reminders, card_metrics = credit_card_overview()
         return render_template("dashboard.html", month=month, income=int(income or 0),
             expenses=expense_total, cashback_earned=int(cashback_earned or 0),
             net=int(income or 0) + int(cashback_earned or 0) - expense_total,
-            recent=recent, breakdown=breakdown, accounts=accounts,
-            card_reminders=card_reminders, card_metrics=card_metrics)
+            recent=recent, breakdown=breakdown, accounts=accounts)
 
     @app.get("/transactions")
     @login_required
@@ -644,13 +670,12 @@ def create_app(test_config: dict | None = None) -> Flask:
                     target_id = int(request.form.get("transfer_to_account_id", ""))
                     if target_id == account_id or not db.session.get(Account, target_id):
                         raise ValueError("Choose a different destination account.")
-                else:
-                    raw_category = request.form.get("category_id", "").strip()
-                    category_id = int(raw_category) if raw_category else None
-                    if category_id:
-                        category = db.session.get(Category, category_id)
-                        if not category or category.kind != kind:
-                            raise ValueError("Choose a category matching the transaction type.")
+                raw_category = request.form.get("category_id", "").strip()
+                category_id = int(raw_category) if raw_category else None
+                if category_id:
+                    category = db.session.get(Category, category_id)
+                    if not category or category.kind != kind:
+                        raise ValueError("Choose a category matching the transaction type.")
                 record = item or Transaction()
                 record.kind = kind
                 record.amount_paise = amount
@@ -684,9 +709,6 @@ def create_app(test_config: dict | None = None) -> Flask:
         if edit_problem:
             flash(edit_problem, "error")
             return redirect(url_for("transactions"))
-        if StatementPayment.query.filter_by(transaction_id=transaction_id).first():
-            flash("This transfer is linked to a card statement. Manage it from Credit Cards; archive or restore remains available in Transactions.", "error")
-            return redirect(url_for("credit_cards"))
         return save_transaction(db.get_or_404(Transaction, transaction_id))
 
     @app.post("/transactions/<int:transaction_id>/archive")
@@ -775,41 +797,19 @@ def create_app(test_config: dict | None = None) -> Flask:
                 limit = used = available = 0
                 mode_label = "Limit not configured"
             utilization = round(used * 100 / limit) if limit else 0
-            card_rows.append({"account": card, "profile": profile, "balance": int(balance_by_id.get(card.id, 0)),
+            card_rows.append({
+                "account": card, "profile": profile, "balance": int(balance_by_id.get(card.id, 0)),
                 "owed": owed, "group": group, "limit_paise": limit, "used_paise": used,
                 "available_paise": available, "utilization": utilization,
-                "progress_pct": min(max(utilization, 0), 100), "mode_label": mode_label})
+                "progress_pct": min(max(utilization, 0), 100), "mode_label": mode_label,
+            })
 
-        statement_rows, reminders = [], []
-        today_value = date.today()
-        all_statements = CreditCardStatement.query.order_by(CreditCardStatement.due_date, CreditCardStatement.id).all()
-        for statement in all_statements:
-            paid_value = db.session.query(func.coalesce(func.sum(StatementPayment.amount_paise), 0)).join(
-                Transaction, Transaction.id == StatementPayment.transaction_id
-            ).filter(StatementPayment.statement_id == statement.id, Transaction.is_archived.is_(False)).scalar()
-            paid = min(int(paid_value or 0), int(statement.total_due_paise))
-            remaining = max(int(statement.total_due_paise) - paid, 0)
-            days_until_due = (statement.due_date - today_value).days
-            if remaining == 0:
-                status, reminder_label = "Paid", ""
-            elif days_until_due < 0:
-                status, reminder_label = "Overdue", f"Overdue by {-days_until_due} day(s)"
-            elif days_until_due == 0:
-                status, reminder_label = "Due today", "Payment due today"
-            elif days_until_due == 2:
-                status, reminder_label = "Due in 2 days", "Payment due in 2 days"
-            else:
-                status, reminder_label = "Upcoming", f"Due in {days_until_due} day(s)"
-            row = {"statement": statement, "card": statement.account, "paid_paise": paid,
-                "remaining_paise": remaining, "days_until_due": days_until_due,
-                "status": status, "reminder_label": reminder_label}
-            statement_rows.append(row)
-            if remaining > 0 and (days_until_due == 2 or days_until_due == 0 or days_until_due < 0):
-                reminders.append(row)
-        metrics = {"total_owed_paise": total_owed, "total_limit_paise": total_limit,
+        metrics = {
+            "total_owed_paise": total_owed, "total_limit_paise": total_limit,
             "available_paise": total_available, "card_count": len(card_accounts),
-            "configured_count": sum(1 for row in card_rows if row["limit_paise"] > 0)}
-        return card_rows, statement_rows, reminders, metrics
+            "configured_count": sum(1 for row in card_rows if row["limit_paise"] > 0),
+        }
+        return card_rows, metrics
 
     @app.route("/credit-cards", methods=["GET", "POST"])
     @login_required
@@ -828,8 +828,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                     db.session.commit()
                     flash("Shared credit limit group created.", "success")
                 elif action == "update_group":
-                    group_id = int(request.form.get("group_id", ""))
-                    group = db.session.get(CreditLimitGroup, group_id)
+                    group = db.session.get(CreditLimitGroup, int(request.form.get("group_id", "")))
                     if not group:
                         raise ValueError("Choose a valid shared limit group.")
                     name = request.form.get("group_name", "").strip()[:80]
@@ -846,111 +845,35 @@ def create_app(test_config: dict | None = None) -> Flask:
                     db.session.commit()
                     flash("Shared credit limit group updated.", "success")
                 elif action == "save_profile":
-                    account_id = int(request.form.get("account_id", ""))
-                    card = db.session.get(Account, account_id)
+                    card = db.session.get(Account, int(request.form.get("account_id", "")))
                     if not card or card.account_type != "credit":
                         raise ValueError("Choose a valid credit card account.")
                     mode = request.form.get("limit_mode", "individual")
                     if mode not in {"individual", "shared"}:
                         raise ValueError("Choose an individual or shared credit limit.")
-                    statement_day = int(request.form.get("statement_day", "1"))
-                    due_day = int(request.form.get("due_day", "20"))
-                    if not 1 <= statement_day <= 28 or not 1 <= due_day <= 28:
-                        raise ValueError("Statement and due days must be between 1 and 28.")
                     profile = CreditCardProfile.query.filter_by(account_id=card.id).first() or CreditCardProfile(account_id=card.id)
-                    profile.limit_mode, profile.statement_day, profile.due_day = mode, statement_day, due_day
+                    profile.limit_mode = mode
                     if mode == "individual":
                         profile.individual_limit_paise = money_to_paise(request.form.get("individual_limit", ""))
                         profile.shared_group_id = None
                     else:
-                        group_id = int(request.form.get("shared_group_id", ""))
-                        group = db.session.get(CreditLimitGroup, group_id)
+                        group = db.session.get(CreditLimitGroup, int(request.form.get("shared_group_id", "")))
                         if not group:
                             raise ValueError("Choose a valid shared credit limit group.")
                         profile.individual_limit_paise, profile.shared_group_id = None, group.id
                     db.session.add(profile)
                     db.session.commit()
-                    flash(f"Credit card details saved for {card.name}.", "success")
-                elif action == "save_statement":
-                    card_id = int(request.form.get("account_id", ""))
-                    card = db.session.get(Account, card_id)
-                    if not card or card.account_type != "credit":
-                        raise ValueError("Choose a valid credit card account.")
-                    statement_month = request.form.get("statement_month", "").strip()
-                    datetime.strptime(statement_month, "%Y-%m")
-                    statement_date = date.fromisoformat(request.form.get("statement_date", ""))
-                    due_date = date.fromisoformat(request.form.get("due_date", ""))
-                    minimum_due = money_to_paise(request.form.get("minimum_due", "0"), allow_zero=True)
-                    if statement_date.strftime("%Y-%m") != statement_month:
-                        raise ValueError("Statement month must match the statement date.")
-                    if due_date <= statement_date:
-                        raise ValueError("The payment due date must be after the statement date.")
-                    # Statement total is derived from the card ledger as of the statement date.
-                    # This prevents a second manually-entered amount from drifting from transactions.
-                    ledger_txns = Transaction.query.filter(
-                        Transaction.is_archived.is_(False),
-                        Transaction.transaction_date <= statement_date,
-                        or_(Transaction.account_id == card.id, Transaction.transfer_to_account_id == card.id),
-                    ).order_by(Transaction.transaction_date, Transaction.id).all()
-                    total_due = int(card.opening_balance_paise or 0)
-                    for ledger_txn in ledger_txns:
-                        if ledger_txn.kind == "transfer":
-                            total_due += -ledger_txn.amount_paise if ledger_txn.transfer_to_account_id == card.id else ledger_txn.amount_paise
-                        elif ledger_txn.account_id == card.id:
-                            total_due += ledger_txn.amount_paise if ledger_txn.kind == "expense" else -ledger_txn.amount_paise
-                    total_due = max(total_due, 0)
-                    if minimum_due > total_due:
-                        raise ValueError("Minimum amount due cannot exceed the transaction-calculated total amount due.")
-                    if CreditCardStatement.query.filter_by(account_id=card.id, statement_month=statement_month).first():
-                        raise ValueError("A statement for this card and month already exists.")
-                    db.session.add(CreditCardStatement(account_id=card.id, statement_month=statement_month,
-                        statement_date=statement_date, due_date=due_date, total_due_paise=total_due,
-                        minimum_due_paise=minimum_due, notes=request.form.get("notes", "").strip()[:500]))
-                    db.session.commit()
-                    flash(f"Statement saved for {card.name}. In-app reminders will appear two days before and on the due date.", "success")
-                elif action == "record_payment":
-                    statement_id = int(request.form.get("statement_id", ""))
-                    statement = db.session.get(CreditCardStatement, statement_id)
-                    if not statement:
-                        raise ValueError("Choose a valid credit card statement.")
-                    source = db.session.get(Account, int(request.form.get("payment_account_id", "")))
-                    if not source or source.id == statement.account_id or source.account_type == "credit":
-                        raise ValueError("Choose a cash, bank, or savings account to pay from.")
-                    already_paid = db.session.query(func.coalesce(func.sum(StatementPayment.amount_paise), 0)).join(
-                        Transaction, Transaction.id == StatementPayment.transaction_id
-                    ).filter(StatementPayment.statement_id == statement.id, Transaction.is_archived.is_(False)).scalar()
-                    remaining = max(int(statement.total_due_paise) - int(already_paid or 0), 0)
-                    amount = money_to_paise(request.form.get("payment_amount", ""))
-                    if remaining <= 0:
-                        raise ValueError("This statement is already fully paid.")
-                    if amount > remaining:
-                        raise ValueError("Payment cannot exceed the remaining statement amount.")
-                    payment_date = date.fromisoformat(request.form.get("payment_date", date.today().isoformat()))
-                    txn = Transaction(transaction_date=payment_date, kind="transfer", amount_paise=amount,
-                        description=f"Credit card payment — {statement.account.name}", account_id=source.id,
-                        transfer_to_account_id=statement.account_id, notes=f"Statement payment for {statement.statement_month}")
-                    db.session.add(txn)
-                    db.session.flush()
-                    source_owner = AccountOwner.query.filter_by(account_id=source.id).first()
-                    db.session.add(TransactionMetadata(
-                        transaction_id=txn.id, budget_scope="family", source="statement_payment",
-                        payer_member_id=source_owner.member_id if source_owner else None,
-                        payer_snapshot_set=True))
-                    db.session.add(StatementPayment(statement_id=statement.id, transaction_id=txn.id, amount_paise=amount))
-                    db.session.commit()
-                    flash("Card statement payment recorded and linked to its bank transfer.", "success")
+                    flash(f"Credit limit saved for {card.name}. Card usage always reflects the transaction ledger.", "success")
                 else:
-                    raise ValueError("Choose a valid credit-card action.")
+                    raise ValueError("Credit-card payments are recorded under Transactions as categorized transfers.")
                 return redirect(url_for("credit_cards"))
             except (ValueError, TypeError) as exc:
                 db.session.rollback()
-                flash(str(exc) or "Check the credit-card details.", "error")
-        card_rows, statement_rows, reminders, metrics = credit_card_overview()
-        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"]), Account.is_active.is_(True)).order_by(Account.name).all()
+                flash(str(exc) or "Check the credit-card settings.", "error")
+
+        card_rows, metrics = credit_card_overview()
         groups = CreditLimitGroup.query.order_by(CreditLimitGroup.name).all()
-        return render_template("credit_cards.html", cards=card_rows, statements=statement_rows, reminders=reminders,
-            metrics=metrics, groups=groups, payment_accounts=payment_accounts,
-            current_month=date.today().strftime("%Y-%m"), two_days_from_now=(date.today() + timedelta(days=2)).isoformat())
+        return render_template("credit_cards.html", cards=card_rows, metrics=metrics, groups=groups)
 
     @app.route("/accounts", methods=["GET", "POST"])
     @login_required
@@ -1371,7 +1294,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                             if not target or target.id == account.id:
                                 raise ValueError("Transfer needs a different existing transfer_to account.")
                             row["transfer_to_account_id"] = target.id
-                        elif row["category"]:
+                        if row["category"]:
                             category = categories_by_name.get(row["category"].lower())
                             if not category or category.kind != row["type"]:
                                 raise ValueError("Category does not match an existing category of that type.")
