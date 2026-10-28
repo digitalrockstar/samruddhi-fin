@@ -7,12 +7,12 @@ The `_legacy/` tree and `secrets/` are off-limits. Do not read or print secrets,
 
 ## V1 features
 - Monthly overview: income, expenses, net cash flow, category breakdown and recent activity.
-- Transactions: income, expense and transfer; add, edit, delete, search and filter.
+- Transactions: income, expense and transfer; add, edit, archive, restore, search and filter.
 - Accounts: cash, bank, savings, credit card and other account types.
 - Custom income and expense categories.
 - CSV preview/import with validation and duplicate detection; CSV export.
 - Responsive desktop/mobile layout and four browser-persisted colour themes.
-- Amounts stored as integer paise; transfers excluded from income/expense totals.
+- Amounts stored as integer paise; transfers excluded from income/expense totals and moved between account balances. Credit-card purchases and payments adjust the amount owed.
 - Optional single-password access gate via environment variables.
 
 ## Run on Windows PowerShell
