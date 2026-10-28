@@ -541,6 +541,11 @@ def register_family_routes(app, db, models, helpers):
     def setup():
         return create_first_admin()
 
+    @app.get("/more")
+    @login_required
+    def more():
+        return render_template("features.html", is_admin=bool(current_member() and current_member().role == "admin"))
+
     @app.route("/people", methods=["GET", "POST"])
     @login_required
     @admin_required
