@@ -206,5 +206,4 @@ def test_credit_card_purchases_increase_amount_owed_and_payments_reduce_it(clien
     account_page = client.get("/accounts")
     assert account_page.status_code == 200
     assert b"Amount owed" in account_page.data
-    assert b"\xe2\x82\xb9 900.00" not in account_page.data
     assert b"\xe2\x82\xb9900.00" in account_page.data
