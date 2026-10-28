@@ -197,19 +197,7 @@
     el.innerHTML = '<svg class="ui-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + iconPaths[name] + '</svg>';
     el.classList.add("has-svg-icon");
   };
-  document.querySelectorAll(".icon-button, .mobile-add").forEach((el) => {
-    const label = ((el.getAttribute("aria-label") || "") + " " + (el.title || "")).toLowerCase();
-    let name = "check";
-    if (/restore|history|undo/.test(label)) name = "history";
-    else if (/archive/.test(label)) name = "archive";
-    else if (/delete|remove|trash/.test(label)) name = "trash";
-    else if (/edit|pencil/.test(label) || el.textContent.trim() === "✎") name = "pencil";
-    else if (/duplicate|copy/.test(label)) name = "copy";
-    else if (/add transaction|new transaction/.test(label)) name = "plus";
-    else if (/cancel|close/.test(label) || el.textContent.trim() === "×") name = "x";
-    else if (/save|submit|create|approve|confirm|apply|record|earmark/.test(label)) name = "save";
-    renderIcon(el, name);
-  });
+  // Action controls use descriptive text labels rather than icon-only glyphs.
   document.querySelectorAll(".nav-icon, .feature-icon").forEach((el) => {
     const label = (el.closest("a")?.innerText || el.parentElement?.innerText || "").toLowerCase();
     let name = "tag";
