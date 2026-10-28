@@ -130,6 +130,8 @@ class StatementPayment(db.Model):
 class FamilyMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    # Nullable for safe additive migration of existing local databases; new accounts always set it.
+    username = db.Column(db.String(64), nullable=True)
     email = db.Column(db.String(254), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(16), nullable=False, default="member")
@@ -369,6 +371,7 @@ def ensure_additive_schema() -> None:
     inspector = sqlalchemy_inspect(db.engine)
     table_names = set(inspector.get_table_names())
     changes = [
+        ("family_member", "username", "VARCHAR(64)"),
         ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
         ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
@@ -378,16 +381,74 @@ def ensure_additive_schema() -> None:
     ]
     columns_by_table = {
         table: {column["name"] for column in inspector.get_columns(table)}
-        for table in table_names if table in {"transaction_metadata", "subscription"}
+        for table in table_names if table in {"family_member", "transaction_metadata", "subscription"}
     }
     for table, column, definition in changes:
         if table in table_names and column not in columns_by_table.get(table, set()):
             db.session.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {definition}'))
+
+    # Existing accounts predate usernames. Derive a stable login handle from the email
+    # local part, adding a member-id suffix only when two handles would collide.
+    if "family_member" in table_names:
+        members = FamilyMember.query.order_by(FamilyMember.id).all()
+        used = {member.username.casefold() for member in members if member.username}
+        for member in members:
+            if member.username and member.username.strip():
+                continue
+            base = re.sub(r"[^a-z0-9._-]", "", (member.email.split("@", 1)[0] or "").lower())[:64]
+            base = base or f"member{member.id}"
+            candidate = base
+            if candidate.casefold() in used:
+                suffix = f"_{member.id}"
+                candidate = f"{base[:64 - len(suffix)]}{suffix}"
+                counter = 2
+                while candidate.casefold() in used:
+                    suffix = f"_{member.id}_{counter}"
+                    candidate = f"{base[:64 - len(suffix)]}{suffix}"
+                    counter += 1
+            member.username = candidate
+            used.add(candidate.casefold())
+        db.session.flush()
+        db.session.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_family_member_username ON family_member(username)"
+        ))
+
     if "subscription_occurrence" in table_names:
         db.session.execute(text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_subscription_occurrence_date "
             "ON subscription_occurrence(subscription_id, occurrence_date)"
         ))
+    db.session.commit()
+
+
+def ensure_primary_admin() -> None:
+    """Keep one recoverable household administrator, always identified as akshayp."""
+    members = FamilyMember.query.order_by(FamilyMember.id).all()
+    active_members = [member for member in members if member.is_active]
+    if not active_members:
+        return
+
+    primary = next(
+        (member for member in active_members if (member.username or "").casefold() == "akshayp"),
+        None,
+    )
+    if primary is None:
+        # If a prior local database already has a household, keep its oldest active admin
+        # where possible rather than discarding access; otherwise use the oldest active member.
+        inactive_primary = next(
+            (member for member in members if (member.username or "").casefold() == "akshayp"),
+            None,
+        )
+        if inactive_primary:
+            inactive_primary.username = f"inactive-akshayp-{inactive_primary.id}"
+            db.session.flush()
+        primary = next((member for member in active_members if member.role == "admin"), None)
+        if primary is None:
+            primary = active_members[0]
+        primary.username = "akshayp"
+
+    for member in members:
+        member.role = "admin" if member.id == primary.id else "member"
     db.session.commit()
 
 
@@ -428,6 +489,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     with app.app_context():
         db.create_all()
         ensure_additive_schema()
+        ensure_primary_admin()
         seed_defaults()
         # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
         # They remain in the shared family context until an existing transaction is edited.
@@ -464,9 +526,15 @@ def create_app(test_config: dict | None = None) -> Flask:
         if FamilyMember.query.filter_by(is_active=True).count() == 0:
             return redirect(url_for("setup"))
         if request.method == "POST":
-            email = request.form.get("email", "").strip().lower()[:254]
+            identifier = (request.form.get("identifier") or request.form.get("email", "")).strip().lower()[:254]
             password = request.form.get("password", "")
-            member = FamilyMember.query.filter(func.lower(FamilyMember.email) == email, FamilyMember.is_active.is_(True)).first()
+            member = FamilyMember.query.filter(
+                or_(
+                    func.lower(FamilyMember.email) == identifier,
+                    func.lower(FamilyMember.username) == identifier,
+                ),
+                FamilyMember.is_active.is_(True),
+            ).first()
             if member and check_password_hash(member.password_hash, password):
                 session.clear()
                 session["member_id"] = member.id
@@ -863,7 +931,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         if request.method == "POST":
             if request.form.get("action") == "save_account_meta":
                 actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
-                if not current_app.config.get("TESTING") and (not actor or actor.role != "admin"):
+                if not current_app.config.get("TESTING") and (
+                    not actor or actor.role != "admin" or actor.username != "akshayp"
+                ):
                     abort(403)
                 try:
                     current_app.extensions["family_finance"]["save_account_owner"](
@@ -889,7 +959,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                     raise ValueError("An account with that name already exists.")
                 actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
                 requested_owner = request.form.get("owner_member_id", "").strip()
-                if not current_app.config.get("TESTING") and actor and actor.role != "admin":
+                if not current_app.config.get("TESTING") and actor and (
+                    actor.role != "admin" or actor.username != "akshayp"
+                ):
                     if requested_owner != str(actor.id):
                         raise ValueError("Family members can add accounts for themselves. Ask an administrator to create a shared account or assign another owner.")
                 new_account = Account(name=name[:80], account_type=kind,

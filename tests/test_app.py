@@ -161,11 +161,15 @@ def test_individual_authentication_setup_and_login(tmp_path):
     assert response.status_code == 200
     assert b"Net cash flow" in response.data
     assert b"admin@example.test" not in response.data
+    with application.app_context():
+        primary_admin = FamilyMember.query.filter_by(email="admin@example.test").one()
+        assert primary_admin.username == "akshayp"
+        assert primary_admin.role == "admin"
     csrf = token(client, "/")
     client.post("/logout", data={"_csrf_token": csrf})
     login_token = token(client, "/login")
     response = client.post("/login", data={
-        "_csrf_token": login_token, "email": "admin@example.test", "password": "a-strong-test-password",
+        "_csrf_token": login_token, "identifier": "akshayp", "password": "a-strong-test-password",
     }, follow_redirects=True)
     assert response.status_code == 200
     assert b"Net cash flow" in response.data
@@ -200,6 +204,42 @@ def test_individual_authentication_setup_and_login(tmp_path):
     assert response.status_code == 200
     assert b"did not match" in response.data
 
+
+
+def test_primary_admin_is_unique_and_member_cannot_manage_people_or_approvals(tmp_path):
+    application = create_app({
+        "TESTING": True, "TEST_AUTH_REQUIRED": True, "SECRET_KEY": "test-only-secret",
+        "APP_PASSWORD": "", "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'admin-permissions.sqlite'}",
+    })
+    client = application.test_client()
+    setup_token = token(client, "/setup")
+    response = client.post("/setup", data={
+        "_csrf_token": setup_token, "name": "Primary Admin", "email": "akshayp@example.test",
+        "password": "a-strong-test-password", "confirm_password": "a-strong-test-password",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    # Supplying role=admin must not grant admin rights to another household login.
+    response = post_form(client, "/people", {
+        "action": "add_member", "name": "Household Member", "username": "member-one",
+        "email": "member@example.test", "password": "another-strong-password", "role": "admin",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with application.app_context():
+        admin = FamilyMember.query.filter_by(username="akshayp").one()
+        member = FamilyMember.query.filter_by(username="member-one").one()
+        assert admin.role == "admin"
+        assert member.role == "member"
+
+    client.post("/logout", data={"_csrf_token": token(client, "/")})
+    login_token = token(client, "/login")
+    response = client.post("/login", data={
+        "_csrf_token": login_token, "identifier": "member-one",
+        "password": "another-strong-password",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert client.get("/people").status_code == 403
+    assert client.get("/approvals").status_code == 403
 
 
 def test_archiving_is_reversible_and_removes_transaction_from_active_views(client, app):

@@ -30,7 +30,7 @@ The _legacy/ tree and secrets/ are off-limits. Do not read or print secrets, imp
     $env:SECRET_KEY = "replace-with-a-long-random-value"
     python app.py
 
-Open http://127.0.0.1:5000. On first run, the app redirects to **Set up your family workspace**. Create the first administrator login. Then use **People** to add each family member with a separate email and initial password. Share initial passwords securely outside the app; each member can change their password after signing in. Email invitations and password-reset email are not configured.
+Open http://127.0.0.1:5000. On first run, the app redirects to **Set up your family workspace**. Create the administrator password for the fixed **akshayp** username and provide the administrator's name and email. The admin can then use **People** to add household members with unique usernames, emails and initial passwords. Other logins are always members, not admins; only **akshayp** can manage household membership, account ownership, cashback rules and approvals. Members can sign in with either username or email. Share initial passwords securely outside the app; each member can change their password after signing in. Email invitations and password-reset email are not configured.
 
 ## Environment variables
 
@@ -43,7 +43,7 @@ Use HTTPS in production, secure database credentials, and persistent database st
 
 ## Family members and permissions
 
-Every member has an individual email/password login and can change their own password. Data is shared within the deployed household workspace. An administrator can create or deactivate member logins, assign account ownership, and manage cashback schemes. Members can enter transactions and create budgets/goals for the shared household workspace. Existing accounts are initially treated as shared until an administrator assigns their owner; this avoids guessing historical payers. Account ownership drives the default payer for new transactions, and that payer is snapshotted so future ownership changes do not rewrite prior attribution. Beneficiary splits are only for spending attribution and never create money owed between members.
+Every member has an individual username/email and password login and can change their own password. Data is shared within the deployed household workspace. The account **akshayp** is the only administrator and can create or deactivate member logins, assign account ownership, manage cashback schemes, and approve cashback credits. Members cannot grant themselves administrator status or access admin-only approval and household-management routes. Members can enter transactions and create budgets/goals for the shared household workspace. Existing accounts are initially treated as shared until an administrator assigns their owner; this avoids guessing historical payers. Account ownership drives the default payer for new transactions, and that payer is snapshotted so future ownership changes do not rewrite prior attribution. Beneficiary splits are only for spending attribution and never create money owed between members.
 
 ## Budgets
 

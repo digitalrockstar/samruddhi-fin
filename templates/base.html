@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -23,10 +24,10 @@
       <a class="nav-link {% if request.endpoint == 'budgets' %}active{% endif %}" href="{{ url_for('budgets') }}"><span class="nav-icon">▥</span><span>Budgets</span></a>
       <a class="nav-link {% if request.endpoint == 'goals' %}active{% endif %}" href="{{ url_for('goals') }}"><span class="nav-icon">◎</span><span>Goals</span></a>
       <a class="nav-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" href="{{ url_for('subscriptions') }}"><span class="nav-icon">◷</span><span>Subscriptions</span></a>
-      <a class="nav-link {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}"><span class="nav-icon">✓</span><span>Approvals</span></a>
-      {% if current_member and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'people' %}active{% endif %}" href="{{ url_for('people') }}"><span class="nav-icon">♙</span><span>People</span></a>{% endif %}
+      {% if current_member and current_member.username == 'akshayp' and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}"><span class="nav-icon">✓</span><span>Approvals</span></a>{% endif %}
+      {% if current_member and current_member.username == 'akshayp' and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'people' %}active{% endif %}" href="{{ url_for('people') }}"><span class="nav-icon">♙</span><span>People</span></a>{% endif %}
       <a class="nav-link {% if request.endpoint == 'categories' %}active{% endif %}" href="{{ url_for('categories') }}"><span class="nav-icon">◈</span><span>Categories</span></a>
-      {% if current_member and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'cashback_schemes' %}active{% endif %}" href="{{ url_for('cashback_schemes') }}"><span class="nav-icon">%</span><span>Cashback schemes</span></a>{% endif %}
+      {% if current_member and current_member.username == 'akshayp' and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'cashback_schemes' %}active{% endif %}" href="{{ url_for('cashback_schemes') }}"><span class="nav-icon">%</span><span>Cashback schemes</span></a>{% endif %}
     </nav>
     <div class="sidebar-bottom">
       <div class="privacy-note"><span class="privacy-dot"></span><span><strong>Your money, your view</strong><small>Private by design</small></span></div>
