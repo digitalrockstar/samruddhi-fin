@@ -387,6 +387,12 @@ def register_family_routes(app, db, models, helpers):
             return "Posted cashback entries are managed from Approvals to preserve the reward audit trail."
         return None
 
+    def transaction_archive_guard(transaction_id):
+        posted_event = CashbackEvent.query.filter_by(posted_transaction_id=transaction_id).first()
+        if posted_event:
+            return "This cashback credit is linked to its approval. Archive or restore the original purchase to reverse it."
+        return None
+
     def on_transaction_archive(transaction, archived):
         event = CashbackEvent.query.filter_by(transaction_id=transaction.id).first()
         if event:
@@ -528,10 +534,8 @@ def register_family_routes(app, db, models, helpers):
                 member = FamilyMember(name=name, email=email, password_hash=generate_password_hash(password), role="admin")
                 db.session.add(member)
                 db.session.flush()
-                # Existing household accounts belong to the first administrator until reassigned.
-                for account in Account.query.all():
-                    if not db.session.get(AccountOwner, account.id):
-                        db.session.add(AccountOwner(account_id=account.id, member_id=member.id))
+                # Existing account ownership is deliberately left unset; unknown historical payers
+                # are not fabricated. The administrator can assign each account in Accounts.
                 db.session.commit()
                 session.clear()
                 session["member_id"] = member.id
@@ -975,6 +979,7 @@ def register_family_routes(app, db, models, helpers):
         "save_transaction_extras": save_transaction_extras,
         "transaction_form_context": transaction_form_context,
         "transaction_edit_guard": transaction_edit_guard,
+        "transaction_archive_guard": transaction_archive_guard,
         "on_transaction_archive": on_transaction_archive,
         "save_account_owner": save_account_owner,
         "enrich_account_rows": enrich_account_rows,
