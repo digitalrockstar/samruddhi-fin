@@ -4,7 +4,11 @@ from datetime import date, timedelta
 
 import pytest
 
-from app import Account, Category, CreditCardProfile, CreditCardStatement, CreditLimitGroup, Transaction, create_app, db, money_to_paise
+from app import (
+    Account, AccountOwner, Budget, CashbackEvent, CashbackScheme, Category, CreditCardProfile,
+    CreditCardStatement, CreditLimitGroup, FamilyMember, Goal, GoalEarmark, Subscription,
+    Transaction, TransactionBeneficiary, TransactionMetadata, create_app, db, money_to_paise,
+)
 
 
 @pytest.fixture()
@@ -139,17 +143,34 @@ def test_post_without_csrf_is_rejected(client):
     assert response.status_code == 400
 
 
-def test_password_gate(monkeypatch, tmp_path):
-    monkeypatch.setenv("APP_PASSWORD", "correct-horse")
-    application = create_app({"TESTING": True, "SECRET_KEY": "test-only-secret",
-        "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'auth.sqlite'}"})
+def test_individual_authentication_setup_and_login(tmp_path):
+    application = create_app({"TESTING": True, "TEST_AUTH_REQUIRED": True, "SECRET_KEY": "test-only-secret",
+        "APP_PASSWORD": "", "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'auth.sqlite'}"})
     client = application.test_client()
     assert client.get("/").status_code == 302
-    token_value = token(client, "/login")
-    response = client.post("/login", data={"_csrf_token": token_value, "password": "correct-horse"},
-                           follow_redirects=True)
+    setup_token = token(client, "/setup")
+    response = client.post("/setup", data={
+        "_csrf_token": setup_token, "name": "Family Admin", "email": "admin@example.test",
+        "password": "a-strong-test-password", "confirm_password": "a-strong-test-password",
+    }, follow_redirects=True)
     assert response.status_code == 200
     assert b"Net cash flow" in response.data
+    assert b"admin@example.test" not in response.data
+    csrf = token(client, "/")
+    client.post("/logout", data={"_csrf_token": csrf})
+    login_token = token(client, "/login")
+    response = client.post("/login", data={
+        "_csrf_token": login_token, "email": "admin@example.test", "password": "a-strong-test-password",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Net cash flow" in response.data
+    bad_client = application.test_client()
+    bad_token = token(bad_client, "/login")
+    response = bad_client.post("/login", data={
+        "_csrf_token": bad_token, "email": "admin@example.test", "password": "wrong-password",
+    })
+    assert response.status_code == 200
+    assert b"did not match" in response.data
 
 
 
@@ -316,3 +337,129 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     assert b"Shared credit limit group updated" in response.data
     assert b"Updated family group" in response.data
     assert b"1100.00" in response.data
+
+
+def test_budget_and_beneficiary_amount_allocations_are_separate(app, client):
+    with app.app_context():
+        groceries = Category.query.filter_by(name="Groceries").one()
+        cash = Account.query.filter_by(name="Cash").one()
+        first = FamilyMember(name="Person A", email="person-a@example.test", password_hash="unused", role="member")
+        second = FamilyMember(name="Person B", email="person-b@example.test", password_hash="unused", role="member")
+        db.session.add_all([first, second])
+        db.session.flush()
+        budget = Budget(name="Family groceries", owner_type="family", category_id=groceries.id,
+            period_type="monthly", amount_paise=1000000, start_date=date.today().replace(day=1))
+        db.session.add(budget)
+        db.session.commit()
+        first_id, second_id, budget_id, cash_id, category_id = first.id, second.id, budget.id, cash.id, groceries.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "100.00", "description": "Shared grocery run",
+        "transaction_date": date.today().isoformat(), "account_id": str(cash_id),
+        "category_id": str(category_id), "notes": "",
+        "budget_selection": f"budget:{budget_id}", "beneficiary_ids": [str(first_id), str(second_id)],
+        "split_method": "amount", f"beneficiary_amount_{first_id}": "60.00",
+        f"beneficiary_amount_{second_id}": "40.00", "cashback_rate": "", "cashback_destination_account_id": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        txn = Transaction.query.filter_by(description="Shared grocery run").one()
+        metadata = db.session.get(TransactionMetadata, txn.id)
+        allocations = {row.member_id: row.amount_paise for row in TransactionBeneficiary.query.filter_by(transaction_id=txn.id).all()}
+        assert metadata.budget_id == budget_id
+        assert metadata.budget_scope == "family"
+        assert allocations == {first_id: 6000, second_id: 4000}
+        assert sum(allocations.values()) == txn.amount_paise
+        assert TransactionBeneficiary.query.filter_by(transaction_id=txn.id).count() == 2
+
+
+def test_goal_earmark_does_not_move_money_or_create_transaction(app, client):
+    with app.app_context():
+        account = Account(name="Bike fund account", account_type="savings", opening_balance_paise=34599200, colour="#7297d2")
+        db.session.add(account)
+        goal = Goal(name="Bike", owner_type="family", target_paise=15000000)
+        db.session.add(goal)
+        db.session.commit()
+        account_id, goal_id = account.id, goal.id
+
+    response = post_form(client, "/goals", {
+        "action": "earmark", "goal_id": str(goal_id), "account_id": str(account_id), "amount": "100000.00",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        earmark = GoalEarmark.query.filter_by(goal_id=goal_id, account_id=account_id).one()
+        assert earmark.amount_paise == 10000000
+        account = db.session.get(Account, account_id)
+        assert account.opening_balance_paise == 34599200
+        assert Transaction.query.count() == 0
+
+
+def test_due_subscription_creates_new_transaction_and_future_amount_does_not_rewrite_history(app, client):
+    with app.app_context():
+        bank = Account.query.filter_by(name="Main bank").one()
+        bills = Category.query.filter_by(name="Bills").one()
+        bank_id, category_id = bank.id, bills.id
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    response = post_form(client, "/subscriptions", {
+        "action": "create", "name": "Microsoft OneDrive", "account_id": str(bank_id),
+        "category_id": str(category_id), "amount": "8549.00", "frequency": "annual",
+        "interval_weeks": "6", "next_date": yesterday, "budget_selection": "family", "notes": "",
+    }, token_path="/transactions/new", follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        generated = Transaction.query.filter_by(description="Microsoft OneDrive").one()
+        assert generated.amount_paise == 854900
+        subscription = Subscription.query.filter_by(name="Microsoft OneDrive").one()
+        subscription_id = subscription.id
+
+    response = post_form(client, "/subscriptions", {
+        "action": "update", "subscription_id": str(subscription_id), "amount": "8708.00",
+        "next_date": date.today().isoformat(), "is_active": "1",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        rows = Transaction.query.filter_by(description="Microsoft OneDrive").order_by(Transaction.id).all()
+        assert [row.amount_paise for row in rows] == [854900, 870800]
+        subscription = db.session.get(Subscription, subscription_id)
+        assert subscription.amount_paise == 870800
+        assert subscription.next_date > date.today()
+
+
+def test_cashback_waits_for_approval_and_credits_selected_destination(app, client):
+    with app.app_context():
+        card = Account.query.filter_by(name="Credit card").one()
+        destination = Account.query.filter_by(name="Main bank").one()
+        scheme = CashbackScheme(name="x3008 AZ reward", account_id=card.id, merchant_keyword="AZ",
+            rate_bps=500, destination_account_id=destination.id, delay_days=0)
+        db.session.add(scheme)
+        db.session.commit()
+        card_id, destination_id = card.id, destination.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "1000.00", "description": "AZ purchase",
+        "transaction_date": date.today().isoformat(), "account_id": str(card_id),
+        "category_id": "", "notes": "", "budget_selection": "family",
+        "cashback_scheme_id": "", "cashback_rate": "", "cashback_destination_account_id": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        source = Transaction.query.filter_by(description="AZ purchase").one()
+        event = CashbackEvent.query.filter_by(transaction_id=source.id).one()
+        assert event.expected_paise == 5000
+        assert event.destination_account_id == destination_id
+        assert event.status == "pending_approval"
+        assert Transaction.query.filter_by(account_id=destination_id, kind="income").count() == 0
+        event_id = event.id
+
+    response = post_form(client, "/approvals", {
+        "event_id": str(event_id), "action": "approve", "actual_amount": "50.00",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        event = db.session.get(CashbackEvent, event_id)
+        assert event.status == "approved"
+        assert event.actual_paise == 5000
+        posted = db.session.get(Transaction, event.posted_transaction_id)
+        assert posted.account_id == destination_id
+        assert db.session.get(TransactionMetadata, posted.id).source == "cashback"
+        assert Transaction.query.filter_by(account_id=destination_id, kind="income").count() == 1
