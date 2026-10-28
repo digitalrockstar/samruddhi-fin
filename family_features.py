@@ -6,6 +6,7 @@ budget selection, goals, subscriptions and rewards remain separately recorded.
 """
 import calendar
 import json
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from functools import wraps
@@ -61,7 +62,7 @@ def register_family_routes(app, db, models, helpers):
             member = current_member()
             if not member:
                 return redirect(url_for("login", next=request.path))
-            if member.role != "admin":
+            if member.role != "admin" or member.username != "akshayp":
                 abort(403)
             return view(*args, **kwargs)
         return wrapped
@@ -568,7 +569,10 @@ def register_family_routes(app, db, models, helpers):
             elif password != confirm:
                 flash("The passwords do not match.", "error")
             else:
-                member = FamilyMember(name=name, email=email, password_hash=generate_password_hash(password), role="admin")
+                member = FamilyMember(
+                    name=name, username="akshayp", email=email,
+                    password_hash=generate_password_hash(password), role="admin",
+                )
                 db.session.add(member)
                 db.session.flush()
                 # Existing account ownership is deliberately left unset; unknown historical payers
@@ -614,7 +618,11 @@ def register_family_routes(app, db, models, helpers):
     @app.get("/more")
     @login_required
     def more():
-        return render_template("features.html", is_admin=bool(current_member() and current_member().role == "admin"))
+        member = current_member()
+        return render_template(
+            "features.html",
+            is_admin=bool(member and member.role == "admin" and member.username == "akshayp"),
+        )
 
     @app.route("/people", methods=["GET", "POST"])
     @login_required
@@ -631,6 +639,8 @@ def register_family_routes(app, db, models, helpers):
                 target = db.session.get(FamilyMember, target_id)
                 if not target:
                     flash("Member not found.", "error")
+                elif target.username == "akshayp":
+                    flash("The primary admin account cannot be deactivated.", "error")
                 elif current_member() and target.id == current_member().id:
                     flash("You cannot deactivate your own login.", "error")
                 elif target.role == "admin" and FamilyMember.query.filter_by(role="admin", is_active=True).count() <= 1:
@@ -642,22 +652,29 @@ def register_family_routes(app, db, models, helpers):
                     return redirect(url_for("people"))
             else:
                 name = request.form.get("name", "").strip()[:100]
+                username = request.form.get("username", "").strip().lower()[:64]
                 email = request.form.get("email", "").strip().lower()[:254]
                 password = request.form.get("password", "")
-                role = request.form.get("role", "member")
+                username_taken = FamilyMember.query.filter(
+                    func.lower(FamilyMember.username) == username
+                ).first() if username else None
                 if not name or "@" not in email:
                     flash("Enter a name and valid email address.", "error")
+                elif not re.fullmatch(r"[a-z0-9._-]{3,64}", username):
+                    flash("Username must be 3–64 characters using lowercase letters, numbers, dots, underscores or hyphens.", "error")
+                elif username == "akshayp" or username_taken:
+                    flash("That username is reserved or already in use.", "error")
                 elif len(password) < 10:
                     flash("Use a password with at least 10 characters.", "error")
-                elif role not in {"member", "admin"}:
-                    flash("Choose a valid role.", "error")
                 elif FamilyMember.query.filter(func.lower(FamilyMember.email) == email).first():
                     flash("That email already has a family login.", "error")
                 else:
-                    db.session.add(FamilyMember(name=name, email=email,
-                        password_hash=generate_password_hash(password), role=role))
+                    db.session.add(FamilyMember(
+                        name=name, username=username, email=email,
+                        password_hash=generate_password_hash(password), role="member",
+                    ))
                     db.session.commit()
-                    flash("Family login created. Share the initial password securely.", "success")
+                    flash("Family login created with member permissions. Share the initial password securely.", "success")
                     return redirect(url_for("people"))
         return render_template("people.html", people=FamilyMember.query.order_by(FamilyMember.is_active.desc(), FamilyMember.name).all(),
                                current_member=current_member())
@@ -905,6 +922,7 @@ def register_family_routes(app, db, models, helpers):
 
     @app.route("/approvals", methods=["GET", "POST"])
     @login_required
+    @admin_required
     def approvals():
         if request.method == "POST":
             try:
