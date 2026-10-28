@@ -30,7 +30,7 @@ The _legacy/ tree and secrets/ are off-limits. Do not read or print secrets, imp
     $env:SECRET_KEY = "replace-with-a-long-random-value"
     python app.py
 
-Open http://127.0.0.1:5000. On first run, the app redirects to **Set up your family workspace**. Create the first administrator login. Then use **People** to add each family member with a separate email and password. Share initial passwords securely outside the app; email delivery is not configured.
+Open http://127.0.0.1:5000. On first run, the app redirects to **Set up your family workspace**. Create the first administrator login. Then use **People** to add each family member with a separate email and initial password. Share initial passwords securely outside the app; each member can change their password after signing in. Email invitations and password-reset email are not configured.
 
 ## Environment variables
 
@@ -43,7 +43,7 @@ Use HTTPS in production, secure database credentials, and persistent database st
 
 ## Family members and permissions
 
-Every member has an individual email/password login. Data is shared within the deployed household workspace. An administrator can create or deactivate member logins and manage cashback schemes/budgets/goals. Members can enter transactions and manage household finances. Account ownership drives default payer attribution; a family/shared account has no single-person payer. Beneficiary splits are only for spending attribution and never create money owed between members.
+Every member has an individual email/password login and can change their own password. Data is shared within the deployed household workspace. An administrator can create or deactivate member logins, assign account ownership, and manage cashback schemes. Members can enter transactions and create budgets/goals for the shared household workspace. Existing accounts are initially treated as shared until an administrator assigns their owner; this avoids guessing historical payers. Account ownership drives the default payer for new transactions, and that payer is snapshotted so future ownership changes do not rewrite prior attribution. Beneficiary splits are only for spending attribution and never create money owed between members.
 
 ## Budgets
 
