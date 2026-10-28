@@ -152,3 +152,16 @@
 .txn-icon .ui-icon{width:18px;height:18px}
 @media(max-width:850px){.data-reset-layout{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:680px){.data-reset-card{padding:16px}.reset-safety-note{padding:16px}.row-actions,.inline-icon-actions,.record-actions,.finance-card-actions{gap:4px}.icon-button{width:36px;height:36px;min-width:36px}}
+
+
+/* Approval page: give the Upcoming panel the same inset as other panels. */
+.approval-upcoming-panel{padding:22px 23px}
+.approval-upcoming-panel .panel-heading{margin-bottom:16px}
+.approval-upcoming-panel .simple-list{display:grid;gap:0}
+.approval-upcoming-panel .simple-row{min-width:0;padding:10px 0;border-bottom:1px solid var(--line)}
+.approval-upcoming-panel .simple-row:last-child{border-bottom:0}
+.approval-upcoming-panel>.finance-muted{margin-top:14px}
+.approval-upcoming-panel .simple-row-main{min-width:0;flex:1}
+.approval-upcoming-panel .simple-row-main strong{display:block;overflow-wrap:anywhere}
+.approval-upcoming-panel .simple-row>strong{white-space:nowrap}
+@media(max-width:640px){.approval-upcoming-panel{padding:17px 14px}}
