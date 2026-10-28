@@ -682,6 +682,34 @@ def register_family_routes(app, db, models, helpers):
     @app.route("/budgets", methods=["GET", "POST"])
     @login_required
     def budgets():
+        if request.method == "POST" and request.form.get("action") == "update":
+            try:
+                budget = db.session.get(Budget, int(request.form.get("budget_id", ""))) or abort(404)
+                name = request.form.get("name", "").strip()[:100]
+                owner_type = request.form.get("owner_type", "family")
+                member_id = int(request.form.get("member_id")) if request.form.get("member_id", "").strip() else None
+                category_id = int(request.form.get("category_id")) if request.form.get("category_id", "").strip() else None
+                amount = money_to_paise(request.form.get("amount", ""))
+                period_type = request.form.get("period_type", "monthly")
+                start_date = date.fromisoformat(request.form.get("start_date", "")) if request.form.get("start_date") else budget.start_date
+                if not name or owner_type not in {"family", "individual"} or period_type not in {"monthly", "annual"}:
+                    raise ValueError("Enter a name and valid budget options.")
+                if owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
+                    raise ValueError("Choose an active member for an individual budget.")
+                if category_id and (not db.session.get(Category, category_id) or db.session.get(Category, category_id).kind != "expense"):
+                    raise ValueError("Choose an expense category.")
+                budget.name, budget.owner_type = name, owner_type
+                budget.member_id = member_id if owner_type == "individual" else None
+                budget.category_id, budget.amount_paise, budget.period_type = category_id, amount, period_type
+                budget.spread_monthly = request.form.get("spread_monthly") == "1" and period_type == "annual"
+                budget.start_date = start_date.replace(month=1, day=1) if period_type == "annual" else start_date.replace(day=1)
+                db.session.commit()
+                flash("Budget updated.", "success")
+                return redirect(url_for("budgets"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Check the budget details.", "error")
+                return redirect(url_for("budgets"))
         if request.method == "POST":
             name = request.form.get("name", "").strip()[:100]
             owner_type = request.form.get("owner_type", "family")
@@ -717,13 +745,14 @@ def register_family_routes(app, db, models, helpers):
                 flash("Budget created.", "success")
                 return redirect(url_for("budgets"))
         budget_rows = []
-        for budget in Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all():
+        show_archived = request.args.get("archived") == "1"
+        for budget in Budget.query.filter_by(is_active=not show_archived).order_by(Budget.owner_type, Budget.name).all():
             row = budget_metrics(budget)
             row["owner_label"] = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             budget_rows.append(row)
         return render_template("budgets.html", budget_rows=budget_rows, people=active_members(),
             categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
-            today=date.today(), month_start=date.today().replace(day=1).isoformat())
+            today=date.today(), month_start=date.today().replace(day=1).isoformat(), show_archived=show_archived)
 
     @app.post("/budgets/<int:budget_id>/toggle")
     @login_required
