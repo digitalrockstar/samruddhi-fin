@@ -263,7 +263,7 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
         "payment_date": date.today().isoformat(),
     }, token_path="/credit-cards", follow_redirects=True)
     assert response.status_code == 200
-    assert b"Statement payment recorded" in response.data
+    assert b"statement payment recorded" in response.data
     assert b"70.00" in response.data
     with app.app_context():
         statement = db.session.get(CreditCardStatement, statement_id)
