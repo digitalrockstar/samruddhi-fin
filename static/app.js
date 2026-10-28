@@ -1,6 +1,6 @@
 (() => {
   const root = document.documentElement;
-  const availableThemes = ["mint", "blue", "violet", "peach", "dark"];
+  const availableThemes = ["mint", "blue", "violet", "peach", "dark", "midnight", "slate", "forest", "ocean", "plum", "graphite"];
   const applyTheme = (theme) => {
     if (!availableThemes.includes(theme)) return;
     root.setAttribute("data-theme", theme);
@@ -12,7 +12,7 @@
     try { window.localStorage.setItem("samruddhi-theme", theme); } catch (_) {}
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      const colors = { mint: "#f4f7f2", blue: "#f3f6fb", violet: "#f7f4fb", peach: "#fbf5ef", dark: "#171b1a" };
+      const colors = { mint: "#f4f7f2", blue: "#f3f6fb", violet: "#f7f4fb", peach: "#fbf5ef", dark: "#171b1a", midnight: "#101522", slate: "#171b20", forest: "#111b17", ocean: "#101c22", plum: "#1b1520", graphite: "#141414" };
       themeMeta.setAttribute("content", colors[theme] || colors.mint);
     }
   };
