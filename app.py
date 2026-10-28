@@ -976,8 +976,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             kind = request.form.get("kind", "expense")
             if not name:
                 flash("Enter a category name.", "error")
-            elif kind not in ("income", "expense"):
-                flash("Choose income or expense.", "error")
+            elif kind not in ("income", "expense", "transfer"):
+                flash("Choose income, expense or transfer.", "error")
             elif Category.query.filter(func.lower(Category.name) == name.lower()).first():
                 flash("That category already exists.", "error")
             else:
