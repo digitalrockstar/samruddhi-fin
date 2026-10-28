@@ -604,3 +604,7 @@ details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margi
 @media(max-width:1050px){.cc-management-grid{grid-template-columns:1fr}.cc-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,285px),1fr))}}
 @media(max-width:640px){.cc-card-grid{grid-template-columns:minmax(0,1fr)}.cc-card{padding:17px}.cc-management-grid{gap:14px}.cc-workflow-panel{padding:18px 15px}.cc-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cc-summary:last-child{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){.cc-card,.cc-workflow-item{animation:none!important;transition:none!important}}
+
+.account-category-grid.transfer-mode{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+@media(max-width:760px){.account-category-grid.transfer-mode{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.account-category-grid,.account-category-grid.transfer-mode{grid-template-columns:minmax(0,1fr)}}
