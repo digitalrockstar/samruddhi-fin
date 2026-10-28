@@ -594,7 +594,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         breakdown = [{"name": name, "colour": colour, "amount": int(value or 0),
             "share": round(int(value or 0) * 100 / expense_total) if expense_total else 0}
             for name, colour, value in category_rows]
-        accounts = Account.query.order_by(Account.name).all()
+        accounts = Account.query.filter_by(is_active=True).order_by(Account.name).all()
         card_rows, statement_rows, card_reminders, card_metrics = credit_card_overview()
         return render_template("dashboard.html", month=month, income=int(income or 0),
             expenses=expense_total, cashback_earned=int(cashback_earned or 0),
@@ -738,7 +738,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         return output
 
     def credit_card_overview():
-        card_accounts = Account.query.filter_by(account_type="credit").order_by(Account.name).all()
+        card_accounts = Account.query.filter_by(account_type="credit", is_active=True).order_by(Account.name).all()
         balance_rows = balances_for_accounts(card_accounts)
         balance_by_id = {row["account"].id: row["balance"] for row in balance_rows}
         profiles = {profile.account_id: profile for profile in CreditCardProfile.query.all()}
@@ -933,7 +933,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 db.session.rollback()
                 flash(str(exc) or "Check the credit-card details.", "error")
         card_rows, statement_rows, reminders, metrics = credit_card_overview()
-        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"])).order_by(Account.name).all()
+        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"]), Account.is_active.is_(True)).order_by(Account.name).all()
         groups = CreditLimitGroup.query.order_by(CreditLimitGroup.name).all()
         return render_template("credit_cards.html", cards=card_rows, statements=statement_rows, reminders=reminders,
             metrics=metrics, groups=groups, payment_accounts=payment_accounts,
