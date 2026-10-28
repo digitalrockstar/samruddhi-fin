@@ -820,6 +820,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     def accounts():
         if request.method == "POST":
             if request.form.get("action") == "save_account_meta":
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                if not current_app.config.get("TESTING") and (not actor or actor.role != "admin"):
+                    abort(403)
                 try:
                     current_app.extensions["family_finance"]["save_account_owner"](
                         int(request.form.get("account_id", "")), request.form.get("owner_member_id", ""),
@@ -842,12 +845,17 @@ def create_app(test_config: dict | None = None) -> Flask:
                     raise ValueError("Choose a valid account type.")
                 if Account.query.filter(func.lower(Account.name) == name.lower()).first():
                     raise ValueError("An account with that name already exists.")
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                requested_owner = request.form.get("owner_member_id", "").strip()
+                if not current_app.config.get("TESTING") and actor and actor.role != "admin":
+                    if requested_owner != str(actor.id):
+                        raise ValueError("Family members can add accounts for themselves. Ask an administrator to create a shared account or assign another owner.")
                 new_account = Account(name=name[:80], account_type=kind,
                     opening_balance_paise=opening, colour=normalized_colour(request.form.get("colour")))
                 db.session.add(new_account)
                 db.session.flush()
                 current_app.extensions["family_finance"]["save_account_owner"](
-                    new_account.id, request.form.get("owner_member_id", ""),
+                    new_account.id, requested_owner,
                     request.form.getlist("purpose_tags"))
                 db.session.commit()
                 flash("Account added.", "success")
@@ -879,6 +887,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                     parent = db.session.get(Category, parent_id)
                     if not parent or parent.kind != kind:
                         flash("Choose a parent category of the same type.", "error")
+                        return redirect(url_for("categories"))
+                    if CategoryParent.query.filter_by(subcategory_id=parent_id).first():
+                        flash("Subcategories can have only one level. Choose an L1 parent category.", "error")
                         return redirect(url_for("categories"))
                 new_category = Category(name=name[:80], kind=kind, icon="circle",
                     colour=normalized_colour(request.form.get("colour")))
