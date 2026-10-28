@@ -203,8 +203,12 @@ class TransactionMetadata(db.Model):
     budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True, index=True)
     budget_scope = db.Column(db.String(12), nullable=False, default="family")
     source = db.Column(db.String(20), nullable=False, default="manual")
+    # Snapshots payer ownership at transaction time. A deliberate NULL snapshot means shared family account.
+    payer_member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
+    payer_snapshot_set = db.Column(db.Boolean, nullable=False, default=False)
     budget = db.relationship("Budget")
     transaction = db.relationship("Transaction")
+    payer = db.relationship("FamilyMember")
 
 
 class TransactionBeneficiary(db.Model):
@@ -563,6 +567,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def transaction_archive(transaction_id: int):
         item = db.get_or_404(Transaction, transaction_id)
+        guard_message = current_app.extensions["family_finance"]["transaction_archive_guard"](transaction_id)
+        if guard_message:
+            flash(guard_message, "error")
+            return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m")))
         item.is_archived = True
         current_app.extensions["family_finance"]["on_transaction_archive"](item, True)
         db.session.commit()
@@ -573,6 +581,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def transaction_restore(transaction_id: int):
         item = db.get_or_404(Transaction, transaction_id)
+        guard_message = current_app.extensions["family_finance"]["transaction_archive_guard"](transaction_id)
+        if guard_message:
+            flash(guard_message, "error")
+            return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m"), archived="1"))
         item.is_archived = False
         current_app.extensions["family_finance"]["on_transaction_archive"](item, False)
         db.session.commit()
