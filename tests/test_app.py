@@ -284,8 +284,8 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
     assert response.status_code == 200
     restored_page = client.get("/credit-cards").data
-    assert b"<small>Paid</small><strong>30.00</strong>" in restored_page
-    assert b"<small>Remaining</small><strong>70.00</strong>" in restored_page
+    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in restored_page
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb970.00</strong>" in restored_page
 
     with app.app_context():
         statement = db.session.get(CreditCardStatement, statement_id)
