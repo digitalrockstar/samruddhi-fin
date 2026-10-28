@@ -523,3 +523,35 @@ def test_cashback_to_card_reduces_owed_balance_and_is_not_regular_income(app, cl
         dashboard = client.get("/")
         assert "₹2,000.00".encode() in dashboard.data
         assert "₹100.00".encode() in dashboard.data
+
+
+def test_transaction_payer_is_snapshotted_when_account_owner_changes(app, client):
+    with app.app_context():
+        cash = Account.query.filter_by(name="Cash").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        first = FamilyMember(name="Original payer", email="original-payer@example.test", password_hash="unused", role="member")
+        second = FamilyMember(name="New payer", email="new-payer@example.test", password_hash="unused", role="member")
+        db.session.add_all([first, second])
+        db.session.flush()
+        db.session.add(AccountOwner(account_id=cash.id, member_id=first.id))
+        db.session.commit()
+        cash_id, category_id, first_id, second_id = cash.id, category.id, first.id, second.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "25.00", "description": "Historical payer check",
+        "transaction_date": date.today().isoformat(), "account_id": str(cash_id),
+        "category_id": str(category_id), "notes": "", "budget_selection": "family",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        txn = Transaction.query.filter_by(description="Historical payer check").one()
+        txn_id = txn.id
+        meta = db.session.get(TransactionMetadata, txn.id)
+        assert meta.payer_member_id == first_id
+        owner = db.session.get(AccountOwner, cash_id)
+        owner.member_id = second_id
+        db.session.commit()
+
+    response = client.get("/transactions")
+    assert response.status_code == 200
+    assert b"Original payer" in response.data
