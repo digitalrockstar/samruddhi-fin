@@ -12,8 +12,8 @@
     try { window.localStorage.setItem("samruddhi-theme", theme); } catch (_) {}
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) {
-      const colors = { mint: "#f4f7f2", blue: "#f3f6fb", violet: "#f7f4fb", peach: "#fbf5ef" };
-      themeMeta.setAttribute("content", colors[theme]);
+      const colors = { mint: "#f4f7f2", blue: "#f3f6fb", violet: "#f7f4fb", peach: "#fbf5ef", dark: "#171b1a" };
+      themeMeta.setAttribute("content", colors[theme] || colors.mint);
     }
   };
   let savedTheme = "mint";
