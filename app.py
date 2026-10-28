@@ -401,6 +401,15 @@ def create_app(test_config: dict | None = None) -> Flask:
     with app.app_context():
         db.create_all()
         seed_defaults()
+        # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
+        # They remain in the shared family context until an existing transaction is edited.
+        known_metadata_ids = set(db.session.query(TransactionMetadata.transaction_id).all())
+        for legacy_txn in Transaction.query.order_by(Transaction.id).all():
+            if legacy_txn.id not in known_metadata_ids:
+                db.session.add(TransactionMetadata(
+                    transaction_id=legacy_txn.id, budget_scope="family", source="legacy",
+                    payer_member_id=None, payer_snapshot_set=True))
+        db.session.commit()
 
     @app.context_processor
     def inject_template_helpers():
