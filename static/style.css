@@ -261,3 +261,90 @@
 /* Reuse the black-and-gold home/rupee mark in the sidebar and mobile brand. */
 .brand-mark-image{display:block;width:39px;height:39px;flex:0 0 39px;object-fit:contain;border-radius:11px;box-shadow:0 2px 5px rgba(0,0,0,.12)}
 .mobile-brand .brand-mark-image{width:31px;height:31px;flex-basis:31px;border-radius:9px}
+
+
+/* Dark theme: preserve the app's accent colour while switching surfaces and text. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#171b1a;
+  --panel:#222826;
+  --ink:#edf2ee;
+  --muted:#a0ada5;
+  --line:#39423d;
+  --accent:#d7b15e;
+  --accent-soft:#393426;
+  --accent-strong:#f0cf7b;
+  --glow:rgba(215,177,94,.18);
+  --shadow:0 8px 30px rgba(0,0,0,.22);
+  background:var(--bg);
+  color:var(--ink);
+}
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .main-area{background:var(--bg);color:var(--ink)}
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .mobile-footer{background:#1d2220;border-color:var(--line)}
+:root[data-theme="dark"] .sidebar{border-right-color:var(--line)}
+:root[data-theme="dark"] .privacy-note,
+:root[data-theme="dark"] .toolbar,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .summary-card,
+:root[data-theme="dark"] .account-card,
+:root[data-theme="dark"] .finance-card,
+:root[data-theme="dark"] .cc-card,
+:root[data-theme="dark"] .form-panel,
+:root[data-theme="dark"] .add-account-panel,
+:root[data-theme="dark"] .add-category-panel,
+:root[data-theme="dark"] .category-panel,
+:root[data-theme="dark"] .import-panel,
+:root[data-theme="dark"] .import-preview,
+:root[data-theme="dark"] .login-panel{background:var(--panel);border-color:var(--line);color:var(--ink)}
+:root[data-theme="dark"] .balance-card{background:#355e4b;color:#fff}
+:root[data-theme="dark"] .button.outline{border-color:var(--line);color:var(--ink)}
+:root[data-theme="dark"] .button.outline:hover,
+:root[data-theme="dark"] .button.soft:hover{background:var(--accent-soft);color:var(--accent-strong)}
+:root[data-theme="dark"] .button.soft,
+:root[data-theme="dark"] .step-number,
+:root[data-theme="dark"] .empty-icon,
+:root[data-theme="dark"] .metric-icon,
+:root[data-theme="dark"] .net-icon{background:var(--accent-soft);color:var(--accent-strong)}
+:root[data-theme="dark"] .expense-icon{background:#422e26;color:#f0a37a}
+:root[data-theme="dark"] .status-pill.positive{background:#294635;color:#a7e1b4}
+:root[data-theme="dark"] .status-pill.neutral{background:#343b37;color:#c0cbc3}
+:root[data-theme="dark"] .status-pill.warning{background:#473723;color:#f0c77f}
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .field textarea,
+:root[data-theme="dark"] .month-select input,
+:root[data-theme="dark"] .field-inline input,
+:root[data-theme="dark"] .field-inline select,
+:root[data-theme="dark"] .search-field input,
+:root[data-theme="dark"] .amount-entry,
+:root[data-theme="dark"] .upload-form input[type=file]{background:#191e1c!important;color:var(--ink)!important;border-color:var(--line)!important}
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder{color:#7f8d84}
+:root[data-theme="dark"] .field input:focus,
+:root[data-theme="dark"] .field select:focus,
+:root[data-theme="dark"] .field textarea:focus,
+:root[data-theme="dark"] .field-inline input:focus,
+:root[data-theme="dark"] .field-inline select:focus,
+:root[data-theme="dark"] .search-field input:focus,
+:root[data-theme="dark"] .amount-entry:focus-within{background:#202623!important}
+:root[data-theme="dark"] .transaction-table th,
+:root[data-theme="dark"] .transaction-table td{border-color:var(--line);color:var(--muted)}
+:root[data-theme="dark"] .transaction-table tbody tr:hover{background:#292f2c}
+:root[data-theme="dark"] .txn-title strong,
+:root[data-theme="dark"] .amount-cell{color:var(--ink)!important}
+:root[data-theme="dark"] .category-chip{border-color:var(--line);background:#252b28}
+:root[data-theme="dark"] .breakdown-track{background:#343c37}
+:root[data-theme="dark"] .account-card-bottom,
+:root[data-theme="dark"] .account-mini-list,
+:root[data-theme="dark"] .transaction-table td{border-color:var(--line)}
+:root[data-theme="dark"] .flash{background:#243d2d;color:#b7e7c0}
+:root[data-theme="dark"] .flash.error{background:#472b25;color:#ffc0a9}
+:root[data-theme="dark"] .import-note{border-color:var(--line)}
+:root[data-theme="dark"] code{background:#343b37;color:#e5ece7}
+:root[data-theme="dark"] .theme-dot.dark{background:#171b1a;border-color:#d7b15e}
+:root[data-theme="dark"] .theme-dot[aria-pressed="true"]::after{background:#fff}
+:root[data-theme="dark"] .mobile-footer>a{color:#a0ada5}
+:root[data-theme="dark"] .mobile-footer .mobile-add{background:var(--accent);color:#171b1a}
