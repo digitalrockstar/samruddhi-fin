@@ -299,7 +299,8 @@
     shield:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>',
     arrows:'<path d="m7 7 4-4 4 4M11 3v12M17 17l-4 4-4-4M13 21V9"/>',
     import:'<path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 17v4h14v-4"/>',
-    export:'<path d="M12 15V3m-5 5 5-5 5 5"/><path d="M5 17v4h14v-4"/>'
+    export:'<path d="M12 15V3m-5 5 5-5 5 5"/><path d="M5 17v4h14v-4"/>',
+    more:'<path d="M4 6h16M4 12h16M4 18h16"/>'
   };
   const renderIcon = (el, name) => {
     if (!el || !iconPaths[name]) return;
