@@ -1,14 +1,27 @@
 (() => {
   const root = document.documentElement;
-  const saved = localStorage.getItem("samruddhi-theme");
-  if (["mint", "blue", "violet", "peach"].includes(saved)) root.dataset.theme = saved;
-  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const theme = button.dataset.themeChoice;
-      if (!["mint", "blue", "violet", "peach"].includes(theme)) return;
-      root.dataset.theme = theme;
-      localStorage.setItem("samruddhi-theme", theme);
+  const availableThemes = ["mint", "blue", "violet", "peach"];
+  const applyTheme = (theme) => {
+    if (!availableThemes.includes(theme)) return;
+    root.setAttribute("data-theme", theme);
+    document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+      const selected = button.dataset.themeChoice === theme;
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+      button.classList.toggle("is-selected", selected);
     });
+    try { window.localStorage.setItem("samruddhi-theme", theme); } catch (_) {}
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+      const colors = { mint: "#f4f7f2", blue: "#f3f6fb", violet: "#f7f4fb", peach: "#fbf5ef" };
+      themeMeta.setAttribute("content", colors[theme]);
+    }
+  };
+  let savedTheme = "mint";
+  try { savedTheme = window.localStorage.getItem("samruddhi-theme") || "mint"; } catch (_) {}
+  applyTheme(savedTheme);
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-theme-choice]");
+    if (button) applyTheme(button.dataset.themeChoice);
   });
   const form = document.querySelector("#transaction-form");
   if (form) {
