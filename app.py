@@ -1002,10 +1002,11 @@ def create_app(test_config: dict | None = None) -> Flask:
             except (ValueError, TypeError) as exc:
                 db.session.rollback()
                 flash(str(exc) or "Check the account details.", "error")
-        account_list = Account.query.filter_by(is_active=True).order_by(Account.name).all()
+        show_archived = request.args.get("archived") == "1"
+        account_list = Account.query.filter_by(is_active=not show_archived).order_by(Account.name).all()
         rows = current_app.extensions["family_finance"]["enrich_account_rows"](balances_for_accounts(account_list))
         return render_template("accounts.html", rows=rows,
-            people=current_app.extensions["family_finance"]["active_members"]())
+            people=current_app.extensions["family_finance"]["active_members"](), show_archived=show_archived)
 
     @app.post("/accounts/<int:account_id>/toggle")
     @login_required
