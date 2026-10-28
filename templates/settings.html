@@ -38,7 +38,7 @@
         <div class="reset-preview"><strong>Records that will be cleared</strong>
           {% if counts %}<ul>{% for label,count in counts.items() %}<li><span>{{ label|replace('_',' ')|title }}</span><strong>{{ count }}</strong></li>{% endfor %}</ul>{% else %}<p>No matching records found for this cutoff.</p>{% endif %}
         </div>
-        <p class="finance-muted">Cutoff: {{ cutoff.strftime('%d %b %Y, %I:%M %p') if cutoff else cutoff_raw }} IST. The filter uses record creation time, not the transaction's effective date.</p>
+        <p class="finance-muted">Cutoff: {{ cutoff_raw.replace('T', ' ') }} IST. The filter uses record creation time, not the transaction's effective date.</p>
         <a class="button outline" href="{{ url_for('download_reset_backup') }}">Download full JSON backup</a>
         <form method="post" action="{{ url_for('perform_data_reset') }}" class="stack-form reset-confirm-form" data-confirm="This permanently removes activity created since the selected time. Continue only after downloading your backup.">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="since"><input type="hidden" name="cutoff" value="{{ cutoff_raw }}">
