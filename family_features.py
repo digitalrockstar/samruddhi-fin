@@ -202,6 +202,9 @@ def register_family_routes(app, db, models, helpers):
         if meta is None:
             meta = TransactionMetadata(transaction_id=transaction.id)
             db.session.add(meta)
+        owner_row = AccountOwner.query.filter_by(account_id=transaction.account_id).first()
+        meta.payer_member_id = owner_row.member_id if owner_row else None
+        meta.payer_snapshot_set = True
         if transaction.kind == "expense":
             selection = request.form.get("budget_selection", "family")
             selected_budget = None
@@ -931,12 +934,16 @@ def register_family_routes(app, db, models, helpers):
         child_parents = {row.subcategory_id: row.parent for row in CategoryParent.query.all()}
         for item in items:
             owner = owner_rows.get(item.account_id)
-            item.payer_name = owner.member.name if owner and owner.member_id and owner.member else (
-                "Family" if owner is None or owner.member_id is None else "Unassigned")
+            meta = db.session.get(TransactionMetadata, item.id)
+            if meta and meta.payer_snapshot_set:
+                payer = db.session.get(FamilyMember, meta.payer_member_id) if meta.payer_member_id else None
+                item.payer_name = payer.name if payer and payer.is_active else "Family"
+            else:
+                item.payer_name = owner.member.name if owner and owner.member_id and owner.member else (
+                    "Family" if owner is None or owner.member_id is None else "Unassigned")
             parent = child_parents.get(item.category_id)
             item.category_display_name = f"{parent.name} › {item.category.name}" if parent and item.category else (
                 item.category.name if item.category else item.kind.title())
-            meta = db.session.get(TransactionMetadata, item.id)
             if meta and meta.budget_id and meta.budget:
                 owner_label = "Family" if meta.budget.owner_type == "family" else (
                     meta.budget.member.name if meta.budget.member else "Individual")
