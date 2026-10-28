@@ -327,6 +327,22 @@ def register_family_routes(app, db, models, helpers):
             beneficiary_ids = [row.member_id for row in TransactionBeneficiary.query.filter_by(
                 transaction_id=transaction.id).all()]
             sub_meta = db.session.get(TransactionMetadata, transaction.id)
+            cashback_event = CashbackEvent.query.filter_by(transaction_id=transaction.id).first()
+            cashback_scheme_id = cashback_event.scheme_id if cashback_event and cashback_event.status != "cancelled" else None
+            cashback_rate_bps = None
+            cashback_destination_id = None
+            cashback_delay = 0
+            if cashback_event and cashback_event.status != "cancelled":
+                cashback_destination_id = cashback_event.destination_account_id
+                cashback_delay = max((cashback_event.expected_date - transaction.transaction_date).days, 0)
+                if cashback_scheme_id:
+                    matched_scheme = db.session.get(CashbackScheme, cashback_scheme_id)
+                    cashback_rate_bps = matched_scheme.rate_bps if matched_scheme else None
+                else:
+                    manual_rate = request.form.get("cashback_rate", "").strip()
+                    if manual_rate:
+                        cashback_rate_bps = int((Decimal(manual_rate) * 100).quantize(
+                            Decimal("1"), rounding=ROUND_HALF_UP))
             db.session.add(Subscription(
                 name=transaction.description[:120], account_id=transaction.account_id,
                 category_id=transaction.category_id, amount_paise=transaction.amount_paise,
@@ -335,6 +351,8 @@ def register_family_routes(app, db, models, helpers):
                 notes=transaction.notes, budget_id=sub_meta.budget_id if sub_meta else None,
                 budget_scope=sub_meta.budget_scope if sub_meta else "family",
                 beneficiary_ids_json=json.dumps(beneficiary_ids),
+                cashback_scheme_id=cashback_scheme_id, cashback_rate_bps=cashback_rate_bps,
+                cashback_destination_account_id=cashback_destination_id, cashback_delay_days=cashback_delay,
                 created_from_transaction_id=transaction.id))
 
     def transaction_form_context(item, accounts, categories):
@@ -481,6 +499,14 @@ def register_family_routes(app, db, models, helpers):
             iterations = 0
             while subscription.is_active and subscription.next_date <= today and iterations < 120:
                 occurrence_date = subscription.next_date
+                existing_occurrence = SubscriptionOccurrence.query.filter_by(
+                    subscription_id=subscription.id, occurrence_date=occurrence_date).first()
+                if existing_occurrence:
+                    subscription.next_date = next_date_after(
+                        occurrence_date, subscription.frequency, subscription.interval_weeks)
+                    iterations += 1
+                    changed = True
+                    continue
                 txn = Transaction(
                     transaction_date=occurrence_date, kind="expense",
                     amount_paise=subscription.amount_paise, description=subscription.name[:180],
@@ -491,9 +517,12 @@ def register_family_routes(app, db, models, helpers):
                 db.session.flush()
                 db.session.add(SubscriptionOccurrence(
                     subscription_id=subscription.id, transaction_id=txn.id, occurrence_date=occurrence_date))
+                payer_owner = AccountOwner.query.filter_by(account_id=txn.account_id).first()
                 db.session.add(TransactionMetadata(
                     transaction_id=txn.id, budget_id=subscription.budget_id,
-                    budget_scope=subscription.budget_scope, source="subscription"))
+                    budget_scope=subscription.budget_scope, source="subscription",
+                    payer_member_id=payer_owner.member_id if payer_owner else None,
+                    payer_snapshot_set=True))
                 member_ids = []
                 try:
                     member_ids = [int(value) for value in json.loads(subscription.beneficiary_ids_json or "[]")]
@@ -507,9 +536,15 @@ def register_family_routes(app, db, models, helpers):
                         db.session.add(TransactionBeneficiary(
                             transaction_id=txn.id, member_id=member_id,
                             amount_paise=base + (1 if idx < remainder else 0), split_method="equal"))
-                scheme = matching_scheme(txn.account_id, txn.description)
-                if scheme:
-                    add_cashback_event(txn, scheme)
+                configured_scheme = db.session.get(CashbackScheme, subscription.cashback_scheme_id) if subscription.cashback_scheme_id else None
+                if subscription.cashback_rate_bps and subscription.cashback_destination_account_id:
+                    add_cashback_event(
+                        txn, configured_scheme, subscription.cashback_rate_bps,
+                        subscription.cashback_destination_account_id, subscription.cashback_delay_days)
+                else:
+                    scheme = matching_scheme(txn.account_id, txn.description)
+                    if scheme:
+                        add_cashback_event(txn, scheme)
                 subscription.next_date = next_date_after(occurrence_date, subscription.frequency, subscription.interval_weeks)
                 iterations += 1
                 changed = True
@@ -894,8 +929,11 @@ def register_family_routes(app, db, models, helpers):
             )
             db.session.add(posted)
             db.session.flush()
+            destination_owner = AccountOwner.query.filter_by(account_id=destination.id).first()
             db.session.add(TransactionMetadata(
-                transaction_id=posted.id, source="cashback", budget_scope="family"))
+                transaction_id=posted.id, source="cashback", budget_scope="family",
+                payer_member_id=destination_owner.member_id if destination_owner else None,
+                payer_snapshot_set=True))
             event.actual_paise = actual_amount
             event.status = "approved"
             event.posted_transaction_id = posted.id
