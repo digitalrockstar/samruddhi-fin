@@ -398,6 +398,9 @@ def test_due_subscription_creates_new_transaction_and_future_amount_does_not_rew
     with app.app_context():
         bank = Account.query.filter_by(name="Main bank").one()
         bills = Category.query.filter_by(name="Bills").one()
+        member = FamilyMember(name="Subscription member", email="sub@example.test", password_hash="unused", role="admin")
+        db.session.add(member)
+        db.session.commit()
         bank_id, category_id = bank.id, bills.id
     yesterday = (date.today() - timedelta(days=1)).isoformat()
     response = post_form(client, "/subscriptions", {
@@ -463,3 +466,11 @@ def test_cashback_waits_for_approval_and_credits_selected_destination(app, clien
         assert posted.account_id == destination_id
         assert db.session.get(TransactionMetadata, posted.id).source == "cashback"
         assert Transaction.query.filter_by(account_id=destination_id, kind="income").count() == 1
+
+
+def test_family_finance_screens_render(client):
+    for path in ("/setup", "/people", "/budgets", "/goals", "/subscriptions",
+                 "/approvals", "/cashback-schemes", "/more", "/accounts", "/categories",
+                 "/credit-cards", "/transactions/new"):
+        response = client.get(path)
+        assert response.status_code == 200, (path, response.status_code, response.data[:500])
