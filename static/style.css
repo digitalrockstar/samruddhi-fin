@@ -463,3 +463,61 @@
 :root[data-theme="dark"] .field input::placeholder,
 :root[data-theme="dark"] .field textarea::placeholder,
 :root[data-theme="dark"] .search-field input::placeholder{color:#829188}
+
+
+/* Dark theme: central palette plus overrides for surfaces that use fixed light colours. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#171b1a;--panel:#202624;--ink:#edf2ee;--muted:#a0ada5;--line:#343d38;
+  --accent:#d3b36b;--accent-soft:#393426;--accent-strong:#f0d58d;
+  --glow:rgba(211,179,107,.18);--shadow:0 8px 30px rgba(0,0,0,.18);
+  background:var(--bg);color:var(--ink)
+}
+:root[data-theme="dark"] body{background:var(--bg);color:var(--ink)}
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .summary-card,
+:root[data-theme="dark"] .toolbar,
+:root[data-theme="dark"] .form-panel,
+:root[data-theme="dark"] .theme-dot{border-color:var(--line)}
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .summary-card:not(.balance-card),
+:root[data-theme="dark"] .toolbar,
+:root[data-theme="dark"] .form-panel,
+:root[data-theme="dark"] .month-select input,
+:root[data-theme="dark"] .field-inline input,
+:root[data-theme="dark"] .field-inline select,
+:root[data-theme="dark"] .search-field input,
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea{background:var(--panel);color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .topbar{border-bottom-color:var(--line)}
+:root[data-theme="dark"] .nav-link{color:#b2beb6}
+:root[data-theme="dark"] .nav-link:hover,
+:root[data-theme="dark"] .transaction-table tbody tr:hover{background:#29312c}
+:root[data-theme="dark"] .nav-link.active{background:var(--accent-soft);color:var(--accent-strong)}
+:root[data-theme="dark"] .privacy-note{background:#272e2a}
+:root[data-theme="dark"] .button.outline{border-color:var(--line);color:var(--ink)}
+:root[data-theme="dark"] .button.soft{background:var(--accent-soft);color:var(--accent-strong)}
+:root[data-theme="dark"] .theme-dot.dark{background:#171b1a}
+:root[data-theme="dark"] .theme-dot.is-selected{outline:2px solid var(--accent);outline-offset:3px}
+:root[data-theme="dark"] .theme-dot:not(.dark){border-color:#202624;box-shadow:0 0 0 1px #657168}
+:root[data-theme="dark"] .card-label,
+:root[data-theme="dark"] .metric-foot,
+:root[data-theme="dark"] .panel-heading p,
+:root[data-theme="dark"] .form-section-heading p,
+:root[data-theme="dark"] .subheading,
+:root[data-theme="dark"] .account-mini-copy small,
+:root[data-theme="dark"] .transaction-table td,
+:root[data-theme="dark"] .txn-title small{color:var(--muted)}
+:root[data-theme="dark"] .txn-title strong,
+:root[data-theme="dark"] .amount-cell{color:var(--ink)!important}
+:root[data-theme="dark"] .transaction-table th,
+:root[data-theme="dark"] .transaction-table td{border-bottom-color:var(--line)}
+:root[data-theme="dark"] .breakdown-track{background:#343d38}
+:root[data-theme="dark"] .status-pill.neutral{background:#343d38;color:#d0d9d2}
+:root[data-theme="dark"] .account-avatar{background:color-mix(in srgb,var(--swatch) 25%,#202624)}
+:root[data-theme="dark"] .segmented-kind span{color:var(--muted)}
+:root[data-theme="dark"] .segmented-kind input:checked+span{color:var(--accent-strong)}
+:root[data-theme="dark"] .mobile-footer{background:#202624;border-color:var(--line)}
