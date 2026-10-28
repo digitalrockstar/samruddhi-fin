@@ -454,6 +454,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         recent = Transaction.query.filter(Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).order_by(
             Transaction.transaction_date.desc(), Transaction.id.desc()).limit(7).all()
+        recent = current_app.extensions["family_finance"]["decorate_transactions"](recent)
         category_rows = db.session.query(Category.name, Category.colour,
             func.sum(Transaction.amount_paise)).join(Transaction, Transaction.category_id == Category.id).filter(
             Transaction.kind == "expense", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
@@ -485,6 +486,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             pattern = f"%{search}%"
             query = query.filter(or_(Transaction.description.ilike(pattern), Transaction.notes.ilike(pattern)))
         items = query.order_by(Transaction.transaction_date.desc(), Transaction.id.desc()).all()
+        items = current_app.extensions["family_finance"]["decorate_transactions"](items)
         return render_template("transactions.html", items=items, month=month, kind=kind, q=search, archived=show_archived)
 
     def save_transaction(item: Transaction | None):
