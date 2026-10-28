@@ -492,6 +492,24 @@ def create_app(test_config: dict | None = None) -> Flask:
                     db.session.add(CreditLimitGroup(name=name, limit_paise=limit))
                     db.session.commit()
                     flash("Shared credit limit group created.", "success")
+                elif action == "update_group":
+                    group_id = int(request.form.get("group_id", ""))
+                    group = db.session.get(CreditLimitGroup, group_id)
+                    if not group:
+                        raise ValueError("Choose a valid shared limit group.")
+                    name = request.form.get("group_name", "").strip()[:80]
+                    limit = money_to_paise(request.form.get("group_limit", ""))
+                    if not name:
+                        raise ValueError("Enter a name for the shared limit group.")
+                    duplicate = CreditLimitGroup.query.filter(
+                        func.lower(CreditLimitGroup.name) == name.lower(),
+                        CreditLimitGroup.id != group.id,
+                    ).first()
+                    if duplicate:
+                        raise ValueError("A shared limit group with that name already exists.")
+                    group.name, group.limit_paise = name, limit
+                    db.session.commit()
+                    flash("Shared credit limit group updated.", "success")
                 elif action == "save_profile":
                     account_id = int(request.form.get("account_id", ""))
                     card = db.session.get(Account, account_id)
