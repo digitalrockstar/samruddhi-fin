@@ -299,12 +299,13 @@ def test_credit_card_purchases_increase_amount_owed_and_payments_reduce_it(clien
     assert b"\xe2\x82\xb9900.00" in account_page.data
 
 
-def test_credit_cards_support_shared_limits_statements_reminders_and_payments(client, app):
+def test_credit_cards_use_transaction_ledger_for_payments_and_limits(client, app):
     with app.app_context():
         main_card = Account.query.filter_by(name="Credit card").one()
         second_card = Account(name="Add-on card", account_type="credit", colour="#7297d2")
         category = Category.query.filter_by(name="Groceries").one()
-        main_card_id, category_id = main_card.id, category.id
+        cc_payment = Category.query.filter_by(name="CC Payment", kind="transfer").one()
+        main_card_id, category_id, cc_payment_id = main_card.id, category.id, cc_payment.id
         db.session.add(second_card)
         db.session.commit()
         second_card_id = second_card.id
@@ -319,7 +320,7 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     for card_id in (main_card_id, second_card_id):
         response = post_form(client, "/credit-cards", {
             "action": "save_profile", "account_id": str(card_id), "limit_mode": "shared",
-            "shared_group_id": str(group_id), "statement_day": "5", "due_day": "25",
+            "shared_group_id": str(group_id),
         }, token_path="/credit-cards", follow_redirects=True)
         assert response.status_code == 200
 
@@ -331,65 +332,52 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
                 description="Add-on card purchase", account_id=second_card_id, category_id=category_id),
         ])
         db.session.commit()
-
-    due_date, statement_date = date.today() + timedelta(days=2), date.today()
-    response = post_form(client, "/credit-cards", {
-        "action": "save_statement", "account_id": str(main_card_id),
-        "statement_month": statement_date.strftime("%Y-%m"), "statement_date": statement_date.isoformat(),
-        "due_date": due_date.isoformat(), "minimum_due": "25.00", "notes": "",
-    }, token_path="/credit-cards", follow_redirects=True)
-    assert response.status_code == 200
-    assert b"Payment due in 2 days" in response.data
-    assert b"200.00" in response.data
-    assert b"800.00" in response.data
-
-    with app.app_context():
-        statement_id = CreditCardStatement.query.filter_by(account_id=main_card_id).one().id
         bank_id = Account.query.filter_by(name="Main bank").one().id
-    response = post_form(client, "/credit-cards", {
-        "action": "record_payment", "statement_id": str(statement_id),
-        "payment_account_id": str(bank_id), "payment_amount": "30.00",
-        "payment_date": date.today().isoformat(),
-    }, token_path="/credit-cards", follow_redirects=True)
-    assert response.status_code == 200
-    assert b"statement payment recorded" in response.data
-    assert b"90.00" in response.data
-    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in response.data
-    assert b"<small>Remaining</small><strong>\xe2\x82\xb990.00</strong>" in response.data
-    with app.app_context():
-        statement = db.session.get(CreditCardStatement, statement_id)
-        payment = Transaction.query.filter_by(kind="transfer", transfer_to_account_id=main_card_id).one()
-        profile = CreditCardProfile.query.filter_by(account_id=second_card_id).one()
-        payment_id = payment.id
-        assert statement.total_due_paise == 12000
-        assert profile.limit_mode == "shared"
-        assert payment.description.startswith("Credit card payment")
 
+    card_page = client.get("/credit-cards")
+    assert card_page.status_code == 200
+    assert b"Total amount owed" in card_page.data
+    assert b"800.00" in card_page.data
+    assert b"Add statement" not in card_page.data
+    assert b"Statements &amp; payments" not in card_page.data
+    assert b"How to record card activity" in card_page.data
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "transfer", "amount": "30.00", "description": "Pay card from bank",
+        "transaction_date": date.today().isoformat(), "account_id": str(bank_id),
+        "transfer_to_account_id": str(main_card_id), "category_id": str(cc_payment_id), "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Transaction saved" in response.data
+    assert b"CC Payment" in client.get("/transactions").data
+
+    with app.app_context():
+        payment = Transaction.query.filter_by(description="Pay card from bank").one()
+        assert payment.kind == "transfer"
+        assert payment.category_id == cc_payment_id
+        assert payment.transfer_to_account_id == main_card_id
+
+    card_page = client.get("/credit-cards")
+    assert b"170.00" in card_page.data
+    assert b"830.00" in card_page.data
+
+    with app.app_context():
+        payment_id = Transaction.query.filter_by(description="Pay card from bank").one().id
     response = post_form(client, f"/transactions/{payment_id}/archive", {}, follow_redirects=True)
     assert response.status_code == 200
-    archived_page = client.get("/credit-cards").data
-    assert b"<small>Paid</small><strong>\xe2\x82\xb90.00</strong>" in archived_page
-    assert b"<small>Remaining</small><strong>\xe2\x82\xb9120.00</strong>" in archived_page
+    archived_balance = client.get("/credit-cards").data
+    assert b"200.00" in archived_balance
+    assert b"800.00" in archived_balance
+
     response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
     assert response.status_code == 200
-    restored_page = client.get("/credit-cards").data
-    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in restored_page
-    assert b"<small>Remaining</small><strong>\xe2\x82\xb990.00</strong>" in restored_page
-
-    with app.app_context():
-        statement = db.session.get(CreditCardStatement, statement_id)
-        statement.due_date = date.today()
-        db.session.commit()
-    assert b"Payment due today" in client.get("/credit-cards").data
-    with app.app_context():
-        statement = db.session.get(CreditCardStatement, statement_id)
-        statement.due_date = date.today() - timedelta(days=1)
-        db.session.commit()
-    assert b"Overdue by 1 day(s)" in client.get("/credit-cards").data
+    restored_balance = client.get("/credit-cards").data
+    assert b"170.00" in restored_balance
+    assert b"830.00" in restored_balance
 
     response = post_form(client, "/credit-cards", {
         "action": "save_profile", "account_id": str(second_card_id), "limit_mode": "individual",
-        "individual_limit": "500.00", "statement_day": "10", "due_day": "28",
+        "individual_limit": "500.00",
     }, token_path="/credit-cards", follow_redirects=True)
     assert response.status_code == 200
     with app.app_context():
@@ -795,38 +783,36 @@ def test_goal_creation_form_includes_csrf_and_creates_goal(client, app):
         assert goal.owner_type == "family"
 
 
-def test_credit_card_statement_total_comes_from_transactions(client, app):
-    with app.app_context():
-        card = Account(name="Test credit card", account_type="credit", opening_balance_paise=0, colour="#7297d2")
-        bank = Account.query.filter_by(name="Main bank").one()
-        db.session.add(card)
-        db.session.flush()
-        card_id, bank_id = card.id, bank.id
-        db.session.add(Transaction(
-            transaction_date=date(2026, 10, 5), kind="expense", amount_paise=150_000,
-            description="Card purchase", account_id=card_id))
-        db.session.add(Transaction(
-            transaction_date=date(2026, 10, 10), kind="transfer", amount_paise=50_000,
-            description="Card payment", account_id=bank_id, transfer_to_account_id=card_id))
-        # This later purchase must not change the statement-date snapshot.
-        db.session.add(Transaction(
-            transaction_date=date(2026, 10, 25), kind="expense", amount_paise=30_000,
-            description="After statement purchase", account_id=card_id))
-        db.session.commit()
 
-    response = post_form(client, "/credit-cards", {
-        "action": "save_statement",
-        "account_id": str(card_id),
-        "statement_month": "2026-10",
-        "statement_date": "2026-10-20",
-        "due_date": "2026-11-10",
-        "minimum_due": "100",
-        "notes": "test statement",
-    }, token_path="/credit-cards", follow_redirects=True)
+
+def test_transfer_categories_can_be_created_and_only_match_transfer_transactions(client, app):
+    response = post_form(client, "/categories", {
+        "name": "Brokerage Move", "kind": "transfer", "parent_category_id": "", "colour": "#7297d2",
+    }, token_path="/categories", follow_redirects=True)
     assert response.status_code == 200
-    assert b"Statement saved for Test credit card" in response.data
+    assert b"Brokerage Move" in response.data
     with app.app_context():
-        statement = CreditCardStatement.query.filter_by(
-            account_id=card_id, statement_month="2026-10").one()
-        assert statement.total_due_paise == 100_000
-        assert statement.minimum_due_paise == 10_000
+        category = Category.query.filter_by(name="Brokerage Move", kind="transfer").one()
+        category_id = category.id
+        bank_id = Account.query.filter_by(name="Main bank").one().id
+        savings_id = Account.query.filter_by(name="Savings").one().id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "transfer", "amount": "75.00", "description": "Brokerage contribution",
+        "transaction_date": date.today().isoformat(), "account_id": str(bank_id),
+        "transfer_to_account_id": str(savings_id), "category_id": str(category_id), "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        txn = Transaction.query.filter_by(description="Brokerage contribution").one()
+        assert txn.category_id == category_id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "10.00", "description": "Invalid category pairing",
+        "transaction_date": date.today().isoformat(), "account_id": str(bank_id),
+        "category_id": str(category_id), "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Choose a category matching the transaction type" in response.data
+    with app.app_context():
+        assert Transaction.query.filter_by(description="Invalid category pairing").count() == 0
