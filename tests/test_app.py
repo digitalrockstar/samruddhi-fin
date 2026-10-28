@@ -307,3 +307,12 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
         profile = CreditCardProfile.query.filter_by(account_id=second_card_id).one()
         assert profile.limit_mode == "individual"
         assert profile.individual_limit_paise == 50000
+
+    response = post_form(client, "/credit-cards", {
+        "action": "update_group", "group_id": str(group_id),
+        "group_name": "Updated family group", "group_limit": "1100.00",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Shared credit limit group updated" in response.data
+    assert b"Updated family group" in response.data
+    assert b"1100.00" in response.data
