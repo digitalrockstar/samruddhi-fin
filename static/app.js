@@ -147,7 +147,8 @@
     if (genericInterval) genericInterval.hidden = genericSubscriptionFrequency.value !== "every_n_weeks";
   });
   if (genericSubscriptionFrequency && genericInterval) genericInterval.hidden = genericSubscriptionFrequency.value !== "every_n_weeks";
-\n  document.querySelectorAll(".cc-config-form").forEach((configForm) => {
+
+  document.querySelectorAll(".cc-config-form").forEach((configForm) => {
     const select = configForm.querySelector("[data-limit-mode]");
     const updateLimitMode = () => {
       configForm.dataset.mode = select?.value === "shared" ? "shared" : "individual";
