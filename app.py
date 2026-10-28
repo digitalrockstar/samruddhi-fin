@@ -880,14 +880,27 @@ def create_app(test_config: dict | None = None) -> Flask:
                     datetime.strptime(statement_month, "%Y-%m")
                     statement_date = date.fromisoformat(request.form.get("statement_date", ""))
                     due_date = date.fromisoformat(request.form.get("due_date", ""))
-                    total_due = money_to_paise(request.form.get("total_due", ""))
                     minimum_due = money_to_paise(request.form.get("minimum_due", "0"), allow_zero=True)
                     if statement_date.strftime("%Y-%m") != statement_month:
                         raise ValueError("Statement month must match the statement date.")
                     if due_date <= statement_date:
                         raise ValueError("The payment due date must be after the statement date.")
+                    # Statement total is derived from the card ledger as of the statement date.
+                    # This prevents a second manually-entered amount from drifting from transactions.
+                    ledger_txns = Transaction.query.filter(
+                        Transaction.is_archived.is_(False),
+                        Transaction.transaction_date <= statement_date,
+                        or_(Transaction.account_id == card.id, Transaction.transfer_to_account_id == card.id),
+                    ).order_by(Transaction.transaction_date, Transaction.id).all()
+                    total_due = int(card.opening_balance_paise or 0)
+                    for ledger_txn in ledger_txns:
+                        if ledger_txn.kind == "transfer":
+                            total_due += -ledger_txn.amount_paise if ledger_txn.transfer_to_account_id == card.id else ledger_txn.amount_paise
+                        elif ledger_txn.account_id == card.id:
+                            total_due += ledger_txn.amount_paise if ledger_txn.kind == "expense" else -ledger_txn.amount_paise
+                    total_due = max(total_due, 0)
                     if minimum_due > total_due:
-                        raise ValueError("Minimum amount due cannot exceed the total amount due.")
+                        raise ValueError("Minimum amount due cannot exceed the transaction-calculated total amount due.")
                     if CreditCardStatement.query.filter_by(account_id=card.id, statement_month=statement_month).first():
                         raise ValueError("A statement for this card and month already exists.")
                     db.session.add(CreditCardStatement(account_id=card.id, statement_month=statement_month,
