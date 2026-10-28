@@ -265,8 +265,8 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     assert response.status_code == 200
     assert b"statement payment recorded" in response.data
     assert b"70.00" in response.data
-    assert b"<small>Paid</small><strong>\\xe2\\x82\\xb930.00</strong>" in response.data
-    assert b"<small>Remaining</small><strong>\\xe2\\x82\\xb970.00</strong>" in response.data
+    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in response.data
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb970.00</strong>" in response.data
     with app.app_context():
         statement = db.session.get(CreditCardStatement, statement_id)
         payment = Transaction.query.filter_by(kind="transfer", transfer_to_account_id=main_card_id).one()
@@ -279,8 +279,8 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     response = post_form(client, f"/transactions/{payment_id}/archive", {}, follow_redirects=True)
     assert response.status_code == 200
     archived_page = client.get("/credit-cards").data
-    assert b"<small>Paid</small><strong>\\xe2\\x82\\xb90.00</strong>" in archived_page
-    assert b"<small>Remaining</small><strong>\\xe2\\x82\\xb9100.00</strong>" in archived_page
+    assert b"<small>Paid</small><strong>\xe2\x82\xb90.00</strong>" in archived_page
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb9100.00</strong>" in archived_page
     response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
     assert response.status_code == 200
     restored_page = client.get("/credit-cards").data
