@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import calendar
 import io
 import json
 import os
@@ -11,9 +12,10 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from functools import wraps
 from typing import Any
 
-from flask import Flask, Response, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import UniqueConstraint, func, or_
+from sqlalchemy import UniqueConstraint, func, inspect as sqlalchemy_inspect, or_, text
+from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
@@ -125,6 +127,172 @@ class StatementPayment(db.Model):
     transaction = db.relationship("Transaction")
 
 
+class FamilyMember(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(254), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(16), nullable=False, default="member")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+
+
+class AccountOwner(db.Model):
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), primary_key=True)
+    # NULL means a shared family account; a member id means individually owned.
+    member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
+    account = db.relationship("Account")
+    member = db.relationship("FamilyMember")
+
+
+class AccountPurposeTag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
+    tag = db.Column(db.String(32), nullable=False)
+    __table_args__ = (UniqueConstraint("account_id", "tag", name="uq_account_purpose_tag"),)
+
+
+class CategoryParent(db.Model):
+    subcategory_id = db.Column(db.Integer, db.ForeignKey("category.id"), primary_key=True)
+    parent_category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=False, index=True)
+    parent = db.relationship("Category", foreign_keys=[parent_category_id])
+    subcategory = db.relationship("Category", foreign_keys=[subcategory_id])
+
+
+class Budget(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    owner_type = db.Column(db.String(12), nullable=False, default="family")
+    member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=True, index=True)
+    period_type = db.Column(db.String(12), nullable=False, default="monthly")
+    amount_paise = db.Column(db.Integer, nullable=False)
+    spread_monthly = db.Column(db.Boolean, nullable=False, default=False)
+    start_date = db.Column(db.Date, nullable=False, default=date.today)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    member = db.relationship("FamilyMember")
+    category = db.relationship("Category")
+
+
+class Goal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    owner_type = db.Column(db.String(12), nullable=False, default="family")
+    member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
+    target_paise = db.Column(db.Integer, nullable=False)
+    target_date = db.Column(db.Date, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    member = db.relationship("FamilyMember")
+
+
+class GoalEarmark(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    goal_id = db.Column(db.Integer, db.ForeignKey("goal.id"), nullable=False, index=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
+    amount_paise = db.Column(db.Integer, nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
+    goal = db.relationship("Goal")
+    account = db.relationship("Account")
+    __table_args__ = (UniqueConstraint("goal_id", "account_id", name="uq_goal_account_earmark"),)
+
+
+class TransactionMetadata(db.Model):
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), primary_key=True)
+    budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True, index=True)
+    budget_scope = db.Column(db.String(12), nullable=False, default="family")
+    source = db.Column(db.String(20), nullable=False, default="manual")
+    # Snapshots payer ownership at transaction time. A deliberate NULL snapshot means shared family account.
+    payer_member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
+    payer_snapshot_set = db.Column(db.Boolean, nullable=False, default=False)
+    budget = db.relationship("Budget")
+    transaction = db.relationship("Transaction")
+    payer = db.relationship("FamilyMember")
+
+
+class TransactionBeneficiary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), nullable=False, index=True)
+    member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=False, index=True)
+    amount_paise = db.Column(db.Integer, nullable=False)
+    split_method = db.Column(db.String(12), nullable=False, default="equal")
+    member = db.relationship("FamilyMember")
+    transaction = db.relationship("Transaction")
+    __table_args__ = (UniqueConstraint("transaction_id", "member_id", name="uq_transaction_beneficiary"),)
+
+
+class CashbackScheme(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
+    merchant_keyword = db.Column(db.String(100), nullable=False)
+    rate_bps = db.Column(db.Integer, nullable=False)
+    destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False)
+    delay_days = db.Column(db.Integer, nullable=False, default=0)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.String(300), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    account = db.relationship("Account", foreign_keys=[account_id])
+    destination_account = db.relationship("Account", foreign_keys=[destination_account_id])
+
+
+class Subscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey("category.id"), nullable=True)
+    amount_paise = db.Column(db.Integer, nullable=False)
+    frequency = db.Column(db.String(16), nullable=False, default="monthly")
+    interval_weeks = db.Column(db.Integer, nullable=False, default=6)
+    next_date = db.Column(db.Date, nullable=False, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    notes = db.Column(db.String(500), nullable=False, default="")
+    budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True)
+    budget_scope = db.Column(db.String(12), nullable=False, default="family")
+    beneficiary_ids_json = db.Column(db.Text, nullable=False, default="[]")
+    cashback_scheme_id = db.Column(db.Integer, db.ForeignKey("cashback_scheme.id"), nullable=True)
+    cashback_rate_bps = db.Column(db.Integer, nullable=True)
+    cashback_destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    cashback_delay_days = db.Column(db.Integer, nullable=False, default=0)
+    created_from_transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    account = db.relationship("Account", foreign_keys=[account_id])
+    category = db.relationship("Category")
+    budget = db.relationship("Budget")
+    cashback_scheme = db.relationship("CashbackScheme")
+    cashback_destination_account = db.relationship("Account", foreign_keys=[cashback_destination_account_id])
+    origin_transaction = db.relationship("Transaction", foreign_keys=[created_from_transaction_id])
+
+
+class SubscriptionOccurrence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey("subscription.id"), nullable=False, index=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=False, index=True)
+    occurrence_date = db.Column(db.Date, nullable=False)
+    subscription = db.relationship("Subscription")
+    transaction = db.relationship("Transaction")
+    __table_args__ = (UniqueConstraint("subscription_id", "occurrence_date", name="uq_subscription_occurrence_date"),)
+
+
+class CashbackEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=False, index=True)
+    scheme_id = db.Column(db.Integer, db.ForeignKey("cashback_scheme.id"), nullable=True)
+    expected_paise = db.Column(db.Integer, nullable=False)
+    actual_paise = db.Column(db.Integer, nullable=True)
+    destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=False)
+    expected_date = db.Column(db.Date, nullable=False, index=True)
+    status = db.Column(db.String(24), nullable=False, default="scheduled", index=True)
+    posted_transaction_id = db.Column(db.Integer, db.ForeignKey("transaction.id"), unique=True, nullable=True)
+    notes = db.Column(db.String(300), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
+    transaction = db.relationship("Transaction", foreign_keys=[transaction_id])
+    scheme = db.relationship("CashbackScheme")
+    destination_account = db.relationship("Account")
+    posted_transaction = db.relationship("Transaction", foreign_keys=[posted_transaction_id])
+
+
 def money_to_paise(value: Any, *, allow_zero: bool = False) -> int:
     """Parse currency without binary floats and store the result as integer paise."""
     try:
@@ -177,9 +345,16 @@ def make_login_required():
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if current_password() and not session.get("authenticated"):
-                return redirect(url_for("login", next=request.path))
-            return view(*args, **kwargs)
+            if current_app.config.get("TESTING") and not current_app.config.get("TEST_AUTH_REQUIRED"):
+                return view(*args, **kwargs)
+            member_id = session.get("member_id")
+            if member_id and db.session.get(FamilyMember, int(member_id)):
+                member = db.session.get(FamilyMember, int(member_id))
+                if member and member.is_active:
+                    return view(*args, **kwargs)
+            if FamilyMember.query.filter_by(is_active=True).count() == 0:
+                return redirect(url_for("setup"))
+            return redirect(url_for("login", next=request.path))
         return wrapped
     return decorator
 
@@ -187,6 +362,33 @@ def make_login_required():
 def current_password() -> str:
     from flask import current_app
     return str(current_app.config.get("APP_PASSWORD") or os.environ.get("APP_PASSWORD") or "")
+
+
+def ensure_additive_schema() -> None:
+    """Apply safe additive changes for databases created by earlier development builds."""
+    inspector = sqlalchemy_inspect(db.engine)
+    table_names = set(inspector.get_table_names())
+    changes = [
+        ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
+        ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
+        ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
+        ("subscription", "cashback_rate_bps", "INTEGER"),
+        ("subscription", "cashback_destination_account_id", "INTEGER REFERENCES account(id)"),
+        ("subscription", "cashback_delay_days", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    columns_by_table = {
+        table: {column["name"] for column in inspector.get_columns(table)}
+        for table in table_names if table in {"transaction_metadata", "subscription"}
+    }
+    for table, column, definition in changes:
+        if table in table_names and column not in columns_by_table.get(table, set()):
+            db.session.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {definition}'))
+    if "subscription_occurrence" in table_names:
+        db.session.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_subscription_occurrence_date "
+            "ON subscription_occurrence(subscription_id, occurrence_date)"
+        ))
+    db.session.commit()
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -208,11 +410,34 @@ def create_app(test_config: dict | None = None) -> Flask:
         app.config["SQLALCHEMY_DATABASE_URI"] = uri.replace("postgresql://", "postgresql+psycopg://", 1)
 
     db.init_app(app)
+    login_required = make_login_required()
+    from family_features import register_family_routes
+    register_family_routes(app, db, {
+        "FamilyMember": FamilyMember, "AccountOwner": AccountOwner, "AccountPurposeTag": AccountPurposeTag,
+        "Category": Category, "CategoryParent": CategoryParent, "Budget": Budget, "Goal": Goal,
+        "GoalEarmark": GoalEarmark, "Transaction": Transaction, "TransactionMetadata": TransactionMetadata,
+        "TransactionBeneficiary": TransactionBeneficiary, "Subscription": Subscription,
+        "SubscriptionOccurrence": SubscriptionOccurrence, "CashbackScheme": CashbackScheme,
+        "CashbackEvent": CashbackEvent, "Account": Account, "CreditCardStatement": CreditCardStatement,
+        "StatementPayment": StatementPayment, "CreditCardProfile": CreditCardProfile,
+    }, {
+        "money_to_paise": money_to_paise, "format_money": format_money,
+        "normalized_colour": normalized_colour, "utcnow_naive": utcnow_naive,
+        "login_required": login_required,
+    })
     with app.app_context():
         db.create_all()
+        ensure_additive_schema()
         seed_defaults()
-
-    login_required = make_login_required()
+        # Preserve pre-family transactions without guessing beneficiaries or a personal payer.
+        # They remain in the shared family context until an existing transaction is edited.
+        known_metadata_ids = {row[0] for row in db.session.query(TransactionMetadata.transaction_id).all()}
+        for legacy_txn in Transaction.query.order_by(Transaction.id).all():
+            if legacy_txn.id not in known_metadata_ids:
+                db.session.add(TransactionMetadata(
+                    transaction_id=legacy_txn.id, budget_scope="family", source="legacy",
+                    payer_member_id=None, payer_snapshot_set=True))
+        db.session.commit()
 
     @app.context_processor
     def inject_template_helpers():
@@ -222,8 +447,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 token = secrets.token_urlsafe(32)
                 session["_csrf_token"] = token
             return token
+        current_member = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
         return {"money": format_money, "today": date.today().isoformat(),
-                "auth_enabled": bool(current_password()), "csrf_token": csrf_token}
+                "auth_enabled": bool(current_member), "current_member": current_member, "csrf_token": csrf_token}
 
     @app.before_request
     def protect_post_requests():
@@ -235,40 +461,48 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        password = current_password()
-        if not password:
-            return redirect(url_for("dashboard"))
+        if FamilyMember.query.filter_by(is_active=True).count() == 0:
+            return redirect(url_for("setup"))
         if request.method == "POST":
-            if secrets.compare_digest(request.form.get("password", ""), password):
+            email = request.form.get("email", "").strip().lower()[:254]
+            password = request.form.get("password", "")
+            member = FamilyMember.query.filter(func.lower(FamilyMember.email) == email, FamilyMember.is_active.is_(True)).first()
+            if member and check_password_hash(member.password_hash, password):
                 session.clear()
-                session["authenticated"] = True
+                session["member_id"] = member.id
                 session["_csrf_token"] = secrets.token_urlsafe(32)
                 target = request.args.get("next", "")
                 if not target.startswith("/") or target.startswith("//"):
                     target = url_for("dashboard")
                 return redirect(target)
-            flash("That password did not match.", "error")
+            flash("Email or password did not match.", "error")
         return render_template("login.html")
 
     @app.post("/logout")
     @login_required
     def logout():
         session.clear()
-        return redirect(url_for("login") if current_password() else url_for("dashboard"))
+        return redirect(url_for("login"))
 
     @app.get("/")
     @login_required
     def dashboard():
         start, end, month = month_bounds(request.args.get("month"))
+        cb_source_ids = db.session.query(TransactionMetadata.transaction_id).filter(TransactionMetadata.source == "cashback")
         income = db.session.query(func.coalesce(func.sum(Transaction.amount_paise), 0)).filter(
             Transaction.kind == "income", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
-            Transaction.transaction_date < end).scalar()
+            Transaction.transaction_date < end, ~Transaction.id.in_(cb_source_ids)).scalar()
+        cashback_earned = db.session.query(func.coalesce(func.sum(Transaction.amount_paise), 0)).join(
+            TransactionMetadata, TransactionMetadata.transaction_id == Transaction.id).filter(
+            TransactionMetadata.source == "cashback", Transaction.kind == "income",
+            Transaction.is_archived.is_(False), Transaction.transaction_date >= start, Transaction.transaction_date < end).scalar()
         expenses = db.session.query(func.coalesce(func.sum(Transaction.amount_paise), 0)).filter(
             Transaction.kind == "expense", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).scalar()
         recent = Transaction.query.filter(Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
             Transaction.transaction_date < end).order_by(
             Transaction.transaction_date.desc(), Transaction.id.desc()).limit(7).all()
+        recent = current_app.extensions["family_finance"]["decorate_transactions"](recent)
         category_rows = db.session.query(Category.name, Category.colour,
             func.sum(Transaction.amount_paise)).join(Transaction, Transaction.category_id == Category.id).filter(
             Transaction.kind == "expense", Transaction.is_archived.is_(False), Transaction.transaction_date >= start,
@@ -281,7 +515,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         accounts = Account.query.order_by(Account.name).all()
         card_rows, statement_rows, card_reminders, card_metrics = credit_card_overview()
         return render_template("dashboard.html", month=month, income=int(income or 0),
-            expenses=expense_total, net=int(income or 0) - expense_total,
+            expenses=expense_total, cashback_earned=int(cashback_earned or 0),
+            net=int(income or 0) + int(cashback_earned or 0) - expense_total,
             recent=recent, breakdown=breakdown, accounts=accounts,
             card_reminders=card_reminders, card_metrics=card_metrics)
 
@@ -299,6 +534,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             pattern = f"%{search}%"
             query = query.filter(or_(Transaction.description.ilike(pattern), Transaction.notes.ilike(pattern)))
         items = query.order_by(Transaction.transaction_date.desc(), Transaction.id.desc()).all()
+        items = current_app.extensions["family_finance"]["decorate_transactions"](items)
         return render_template("transactions.html", items=items, month=month, kind=kind, q=search, archived=show_archived)
 
     def save_transaction(item: Transaction | None):
@@ -343,13 +579,16 @@ def create_app(test_config: dict | None = None) -> Flask:
                 record.transfer_to_account_id = target_id
                 record.notes = request.form.get("notes", "").strip()[:500]
                 db.session.add(record)
+                db.session.flush()
+                current_app.extensions["family_finance"]["save_transaction_extras"](record, item is None)
                 db.session.commit()
                 flash("Transaction saved.", "success")
                 return redirect(url_for("transactions"))
             except (ValueError, TypeError) as exc:
                 db.session.rollback()
                 flash(str(exc) or "Check the transaction details.", "error")
-        return render_template("transaction_form.html", item=item, accounts=accounts, categories=categories)
+        form_context = current_app.extensions["family_finance"]["transaction_form_context"](item, accounts, categories)
+        return render_template("transaction_form.html", item=item, accounts=accounts, categories=categories, **form_context)
 
     @app.route("/transactions/new", methods=["GET", "POST"])
     @login_required
@@ -359,6 +598,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.route("/transactions/<int:transaction_id>/edit", methods=["GET", "POST"])
     @login_required
     def transaction_edit(transaction_id: int):
+        edit_problem = current_app.extensions["family_finance"]["transaction_edit_guard"](transaction_id)
+        if edit_problem:
+            flash(edit_problem, "error")
+            return redirect(url_for("transactions"))
         if StatementPayment.query.filter_by(transaction_id=transaction_id).first():
             flash("This transfer is linked to a card statement. Manage it from Credit Cards; archive or restore remains available in Transactions.", "error")
             return redirect(url_for("credit_cards"))
@@ -368,7 +611,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def transaction_archive(transaction_id: int):
         item = db.get_or_404(Transaction, transaction_id)
+        guard_message = current_app.extensions["family_finance"]["transaction_archive_guard"](transaction_id)
+        if guard_message:
+            flash(guard_message, "error")
+            return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m")))
         item.is_archived = True
+        current_app.extensions["family_finance"]["on_transaction_archive"](item, True)
         db.session.commit()
         flash("Transaction archived. You can restore it from Archived transactions.", "success")
         return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m")))
@@ -377,7 +625,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def transaction_restore(transaction_id: int):
         item = db.get_or_404(Transaction, transaction_id)
+        guard_message = current_app.extensions["family_finance"]["transaction_archive_guard"](transaction_id)
+        if guard_message:
+            flash(guard_message, "error")
+            return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m"), archived="1"))
         item.is_archived = False
+        current_app.extensions["family_finance"]["on_transaction_archive"](item, False)
         db.session.commit()
         flash("Transaction restored.", "success")
         return redirect(url_for("transactions", month=item.transaction_date.strftime("%Y-%m")))
@@ -583,6 +836,11 @@ def create_app(test_config: dict | None = None) -> Flask:
                         transfer_to_account_id=statement.account_id, notes=f"Statement payment for {statement.statement_month}")
                     db.session.add(txn)
                     db.session.flush()
+                    source_owner = AccountOwner.query.filter_by(account_id=source.id).first()
+                    db.session.add(TransactionMetadata(
+                        transaction_id=txn.id, budget_scope="family", source="statement_payment",
+                        payer_member_id=source_owner.member_id if source_owner else None,
+                        payer_snapshot_set=True))
                     db.session.add(StatementPayment(statement_id=statement.id, transaction_id=txn.id, amount_paise=amount))
                     db.session.commit()
                     flash("Card statement payment recorded and linked to its bank transfer.", "success")
@@ -603,6 +861,21 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def accounts():
         if request.method == "POST":
+            if request.form.get("action") == "save_account_meta":
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                if not current_app.config.get("TESTING") and (not actor or actor.role != "admin"):
+                    abort(403)
+                try:
+                    current_app.extensions["family_finance"]["save_account_owner"](
+                        int(request.form.get("account_id", "")), request.form.get("owner_member_id", ""),
+                        request.form.getlist("purpose_tags"))
+                    db.session.commit()
+                    flash("Account settings saved.", "success")
+                    return redirect(url_for("accounts"))
+                except (ValueError, TypeError) as exc:
+                    db.session.rollback()
+                    flash(str(exc) or "Check account settings.", "error")
+                    return redirect(url_for("accounts"))
             try:
                 name = request.form.get("name", "").strip()
                 kind = request.form.get("account_type", "bank")
@@ -614,8 +887,18 @@ def create_app(test_config: dict | None = None) -> Flask:
                     raise ValueError("Choose a valid account type.")
                 if Account.query.filter(func.lower(Account.name) == name.lower()).first():
                     raise ValueError("An account with that name already exists.")
-                db.session.add(Account(name=name[:80], account_type=kind,
-                    opening_balance_paise=opening, colour=normalized_colour(request.form.get("colour"))))
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                requested_owner = request.form.get("owner_member_id", "").strip()
+                if not current_app.config.get("TESTING") and actor and actor.role != "admin":
+                    if requested_owner != str(actor.id):
+                        raise ValueError("Family members can add accounts for themselves. Ask an administrator to create a shared account or assign another owner.")
+                new_account = Account(name=name[:80], account_type=kind,
+                    opening_balance_paise=opening, colour=normalized_colour(request.form.get("colour")))
+                db.session.add(new_account)
+                db.session.flush()
+                current_app.extensions["family_finance"]["save_account_owner"](
+                    new_account.id, requested_owner,
+                    request.form.getlist("purpose_tags"))
                 db.session.commit()
                 flash("Account added.", "success")
                 return redirect(url_for("accounts"))
@@ -623,7 +906,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 db.session.rollback()
                 flash(str(exc) or "Check the account details.", "error")
         account_list = Account.query.order_by(Account.name).all()
-        return render_template("accounts.html", rows=balances_for_accounts(account_list))
+        rows = current_app.extensions["family_finance"]["enrich_account_rows"](balances_for_accounts(account_list))
+        return render_template("accounts.html", rows=rows,
+            people=current_app.extensions["family_finance"]["active_members"]())
 
     @app.route("/categories", methods=["GET", "POST"])
     @login_required
@@ -638,13 +923,31 @@ def create_app(test_config: dict | None = None) -> Flask:
             elif Category.query.filter(func.lower(Category.name) == name.lower()).first():
                 flash("That category already exists.", "error")
             else:
-                db.session.add(Category(name=name[:80], kind=kind, icon="circle",
-                    colour=normalized_colour(request.form.get("colour"))))
+                parent_raw = request.form.get("parent_category_id", "").strip()
+                parent_id = int(parent_raw) if parent_raw else None
+                if parent_id:
+                    parent = db.session.get(Category, parent_id)
+                    if not parent or parent.kind != kind:
+                        flash("Choose a parent category of the same type.", "error")
+                        return redirect(url_for("categories"))
+                    if CategoryParent.query.filter_by(subcategory_id=parent_id).first():
+                        flash("Subcategories can have only one level. Choose an L1 parent category.", "error")
+                        return redirect(url_for("categories"))
+                new_category = Category(name=name[:80], kind=kind, icon="circle",
+                    colour=normalized_colour(request.form.get("colour")))
+                db.session.add(new_category)
+                db.session.flush()
+                if parent_id:
+                    db.session.add(CategoryParent(subcategory_id=new_category.id, parent_category_id=parent_id))
                 db.session.commit()
-                flash("Category added.", "success")
+                flash("Subcategory added." if parent_id else "Category added.", "success")
                 return redirect(url_for("categories"))
-        rows = Category.query.order_by(Category.kind, Category.name).all()
-        return render_template("categories.html", categories=rows)
+        rows = current_app.extensions["family_finance"]["enrich_categories"](
+            Category.query.order_by(Category.kind, Category.name).all())
+        subcategory_ids = {row.subcategory_id for row in CategoryParent.query.all()}
+        parents = [row for row in Category.query.order_by(Category.kind, Category.name).all()
+                   if row.id not in subcategory_ids]
+        return render_template("categories.html", categories=rows, parents=parents)
 
     @app.get("/export.csv")
     @login_required
@@ -682,10 +985,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             for row in rows:
                 if row.get("error") or duplicate_exists(row):
                     continue
-                db.session.add(Transaction(transaction_date=date.fromisoformat(row["date"]),
+                txn = Transaction(transaction_date=date.fromisoformat(row["date"]),
                     kind=row["type"], amount_paise=int(row["amount_paise"]), description=row["description"],
                     account_id=int(row["account_id"]), category_id=row.get("category_id"),
-                    transfer_to_account_id=row.get("transfer_to_account_id"), notes=row.get("notes", "")))
+                    transfer_to_account_id=row.get("transfer_to_account_id"), notes=row.get("notes", ""))
+                db.session.add(txn)
+                db.session.flush()
+                account_owner = AccountOwner.query.filter_by(account_id=txn.account_id).first()
+                db.session.add(TransactionMetadata(
+                    transaction_id=txn.id, budget_scope="family", source="import",
+                    payer_member_id=account_owner.member_id if account_owner else None,
+                    payer_snapshot_set=True))
                 saved += 1
             batch.consumed = True
             db.session.commit()
