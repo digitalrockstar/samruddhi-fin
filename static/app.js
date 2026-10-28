@@ -27,6 +27,49 @@
       applyTheme(button.dataset.themeChoice);
     });
   });
+
+  // Turn record-edit disclosures into real modal dialogs without changing
+  // their POST forms, field names, CSRF tokens, or submit destinations.
+  document.querySelectorAll("details").forEach((details) => {
+    const summary = details.querySelector(":scope > summary");
+    const form = details.querySelector(":scope > form.record-edit-form");
+    if (!summary || !form) return;
+    const dialog = document.createElement("dialog");
+    dialog.className = "record-edit-dialog";
+    const header = document.createElement("div");
+    header.className = "record-edit-dialog-header";
+    const title = document.createElement("strong");
+    title.textContent = summary.textContent.trim();
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "record-edit-dialog-close";
+    close.setAttribute("aria-label", "Close edit form");
+    close.textContent = "×";
+    close.addEventListener("click", () => dialog.close());
+    header.append(title, close);
+    const body = document.createElement("div");
+    body.className = "record-edit-dialog-body";
+    body.appendChild(form);
+    dialog.append(header, body);
+    document.body.appendChild(dialog);
+    summary.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else dialog.setAttribute("open", "");
+    });
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  });
+
+  // Some edit disclosures are inside an existing form (subscriptions).
+  // Their details remain in that form so all values still submit together;
+  // CSS presents the expanded section as a modal-style overlay.
+  document.querySelectorAll("form details").forEach((details) => {
+    if (details.querySelector(":scope > form")) return;
+    details.classList.add("inline-edit-modal");
+  });
+
   const form = document.querySelector("#transaction-form");
   if (form) {
     const categoryField = form.querySelector(".category-field");
