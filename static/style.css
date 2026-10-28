@@ -98,3 +98,5 @@
   .panel:has(> .stack-form), .panel.password-panel, .panel.add-account-panel { padding: 17px; }
   .field-grid { grid-template-columns: minmax(0,1fr); gap:14px; }
 }
+
+.record-view-toggle{display:flex;justify-content:flex-end;margin:-12px 0 14px;padding:0 2px}.record-edit-form{max-width:100%}details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}
