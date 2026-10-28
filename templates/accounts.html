@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Accounts{% endblock %}
 {% block content %}
-<section class="page-heading"><div><div class="eyebrow">YOUR MONEY SPACES</div><h1>Accounts</h1><p class="subheading">The owner is the default payer. Purpose tags describe how an account is used.</p></div></section>
+<section class="page-heading"><div><div class="eyebrow">YOUR MONEY SPACES</div><h1>Accounts</h1><p class="subheading">The owner is the default payer. Purpose tags describe how an account is used.</p></div><button class="button primary" type="button" data-open-dialog="create-account-dialog">＋ Add account</button></section>
 <div class="record-view-toggle"><a class="text-link" href="{{ url_for('accounts', archived=1 if not show_archived else 0) }}">{{ "View active accounts" if show_archived else "View archived accounts" }}</a></div>
 <div class="accounts-layout">
 <section class="account-cards">
@@ -27,7 +27,7 @@
 </article>
 {% endfor %}
 </section>
-<section class="panel add-account-panel"><div class="panel-heading"><div><h2>Add account</h2><p>Type describes the instrument; purpose tags describe its job.</p></div></div>
+<dialog class="create-record-dialog" id="create-account-dialog"><section class="panel add-account-panel"><div class="create-dialog-heading"><div><span class="eyebrow">NEW ACCOUNT</span><h2>Add account</h2><p class="subheading">Type describes the instrument; purpose tags describe its job.</p></div><button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button></div>
 <form method="post" class="stack-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 <label class="field"><span>ACCOUNT NAME</span><input name="name" placeholder="e.g. AZ Wallet" maxlength="80" required></label>
 <label class="field"><span>ACCOUNT TYPE</span><select name="account_type"><option value="cash">Cash</option><option value="bank" selected>Bank</option><option value="savings">Savings</option><option value="credit">Credit card</option><option value="investment">Investment</option><option value="other">Other / wallet</option></select></label>
@@ -36,5 +36,5 @@
 <label class="field"><span>OWNER / PAYER</span><select name="owner_member_id"><option value="">Shared family account</option>{% for person in people %}<option value="{{ person.id }}" {% if current_member and current_member.id == person.id %}selected{% endif %}>{{ person.name }}</option>{% endfor %}</select></label>
 {% else %}<input type="hidden" name="owner_member_id" value="{{ current_member.id }}"><p class="finance-muted">This account will be assigned to you. Ask a family administrator to create a shared account or assign a different owner.</p>{% endif %}
 <div class="purpose-tag-grid"><span class="field-label">PURPOSE TAGS</span>{% for value,label in [('expense','Expenses'),('credit','Credit card'),('savings','Savings'),('emergency','Emergency fund'),('investment','Investment'),('wallet','Wallet'),('bills','Bills/subscriptions')] %}<label class="check-chip"><input type="checkbox" name="purpose_tags" value="{{ value }}"><span>{{ label }}</span></label>{% endfor %}</div>
-<label class="field"><span>COLOUR</span><input name="colour" type="color" value="#7297d2"></label><button class="icon-button primary" type="submit" title="Create account" aria-label="Create account">Add account</button></form></section></div>
+<label class="field"><span>COLOUR</span><input name="colour" type="color" value="#7297d2"></label><button class="icon-button primary" type="submit" title="Create account" aria-label="Create account">Add account</button></form></section></dialog></div>
 {% endblock %}
