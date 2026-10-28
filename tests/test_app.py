@@ -265,6 +265,8 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
     assert response.status_code == 200
     assert b"statement payment recorded" in response.data
     assert b"70.00" in response.data
+    assert b"<small>Paid</small><strong>30.00</strong>" in response.data
+    assert b"<small>Remaining</small><strong>70.00</strong>" in response.data
     with app.app_context():
         statement = db.session.get(CreditCardStatement, statement_id)
         payment = Transaction.query.filter_by(kind="transfer", transfer_to_account_id=main_card_id).one()
@@ -276,10 +278,25 @@ def test_credit_cards_support_shared_limits_statements_reminders_and_payments(cl
 
     response = post_form(client, f"/transactions/{payment_id}/archive", {}, follow_redirects=True)
     assert response.status_code == 200
-    assert b"100.00" in client.get("/credit-cards").data
+    archived_page = client.get("/credit-cards").data
+    assert b"<small>Paid</small><strong>0.00</strong>" in archived_page
+    assert b"<small>Remaining</small><strong>100.00</strong>" in archived_page
     response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
     assert response.status_code == 200
-    assert b"70.00" in client.get("/credit-cards").data
+    restored_page = client.get("/credit-cards").data
+    assert b"<small>Paid</small><strong>30.00</strong>" in restored_page
+    assert b"<small>Remaining</small><strong>70.00</strong>" in restored_page
+
+    with app.app_context():
+        statement = db.session.get(CreditCardStatement, statement_id)
+        statement.due_date = date.today()
+        db.session.commit()
+    assert b"Payment due today" in client.get("/credit-cards").data
+    with app.app_context():
+        statement = db.session.get(CreditCardStatement, statement_id)
+        statement.due_date = date.today() - timedelta(days=1)
+        db.session.commit()
+    assert b"Overdue by 1 day(s)" in client.get("/credit-cards").data
 
     response = post_form(client, "/credit-cards", {
         "action": "save_profile", "account_id": str(second_card_id), "limit_mode": "individual",
