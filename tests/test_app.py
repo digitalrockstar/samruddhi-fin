@@ -512,15 +512,13 @@ def test_cashback_to_card_reduces_owed_balance_and_is_not_regular_income(app, cl
     assert b"Cashback received" in response.data
     assert b"Money in" in response.data
     with app.app_context():
-        rows = current_app.extensions["family_finance"]["decorate_transactions"](
-            Transaction.query.filter_by(account_id=card_id).all())
         card = db.session.get(Account, card_id)
         assert card.opening_balance_paise == 0
         # Credit-card purchases increase debt; cashback applied to that same card reduces it.
-        assert b"₹1,900.00" in client.get("/accounts").data
+        assert "₹1,900.00".encode() in client.get("/accounts").data
         posted_event = db.session.get(CashbackEvent, event_id)
         posted = db.session.get(Transaction, posted_event.posted_transaction_id)
         assert posted.kind == "income" and posted.account_id == card_id
         dashboard = client.get("/")
-        assert b"₹2,000.00" in dashboard.data
-        assert b"₹100.00" in dashboard.data
+        assert "₹2,000.00".encode() in dashboard.data
+        assert "₹100.00".encode() in dashboard.data
