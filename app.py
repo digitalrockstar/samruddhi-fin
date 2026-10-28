@@ -581,7 +581,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             metrics=metrics, groups=groups, payment_accounts=payment_accounts,
             current_month=date.today().strftime("%Y-%m"), two_days_from_now=(date.today() + timedelta(days=2)).isoformat())
 
-    @app.route("/accounts", methods=["GET", "POST"])    @app.route("/accounts", methods=["GET", "POST"])
+    @app.route("/accounts", methods=["GET", "POST"])
     @login_required
     def accounts():
         if request.method == "POST":
