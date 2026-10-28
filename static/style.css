@@ -76,3 +76,27 @@
 .summary-card.reward-card .metric-icon{background:rgba(169,139,59,.14);color:#806c2f}
 @media(max-width:1050px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.summary-grid{grid-template-columns:1fr}.finance-card{padding:15px}.icon-button{width:40px;height:40px;min-width:40px}.page-heading{gap:12px}.finance-money-row strong{font-size:1.18rem}.beneficiary-value-row{grid-template-columns:1fr;gap:8px}}
+
+
+/* Consistent form gutters; quiet icon-only controls */
+.panel:has(> .stack-form), .panel.password-panel, .panel.add-account-panel { padding: clamp(18px, 2.2vw, 28px); }
+.stack-form, .account-owner-form, .finance-card form { min-width: 0; width: 100%; }
+.field-grid > *, .stack-form > *, .account-owner-form > * { min-width: 0; }
+.field input, .field select, .field textarea { max-width: 100%; }
+.password-panel .panel-heading { margin-bottom: 24px; }
+.password-panel .stack-form { gap: 18px; }
+.icon-button { background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+.icon-button:hover { background: var(--accent-soft) !important; color: var(--accent-strong) !important; transform: none; }
+.icon-button.primary { color: var(--accent) !important; background: transparent !important; border-color: transparent !important; }
+.icon-button.primary:hover { color: var(--accent-strong) !important; }
+.icon-button.danger { color: #b85d5d !important; }
+.finance-card-actions, .record-actions { display:flex; align-items:center; gap:4px; margin-top:10px; }
+.finance-card-actions form, .record-actions form { margin:0; }
+.record-edit-form { border-top:1px solid var(--line); margin-top:12px; padding-top:14px; }
+@media (max-width: 680px) {
+  .page-content { padding: 24px 16px 44px; }
+  .panel:has(> .stack-form), .panel.password-panel, .panel.add-account-panel { padding: 17px; }
+  .field-grid { grid-template-columns: minmax(0,1fr); gap:14px; }
+}
+
+.record-view-toggle{display:flex;justify-content:flex-end;margin:-12px 0 14px;padding:0 2px}.record-edit-form{max-width:100%}details>summary{cursor:pointer;list-style:none}details>summary::-webkit-details-marker{display:none}

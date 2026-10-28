@@ -497,7 +497,7 @@ def register_family_routes(app, db, models, helpers):
             return
         changed = False
         today = date.today()
-        for subscription in Subscription.query.filter_by(is_active=True).filter(
+        for subscription in Subscription.query.filter_by(is_active=True, is_archived=False).filter(
             Subscription.next_date <= today).order_by(Subscription.next_date).limit(100).all():
             iterations = 0
             while subscription.is_active and subscription.next_date <= today and iterations < 120:
@@ -682,6 +682,36 @@ def register_family_routes(app, db, models, helpers):
     @app.route("/budgets", methods=["GET", "POST"])
     @login_required
     def budgets():
+        if request.method == "POST" and request.form.get("action") == "update":
+            try:
+                budget = db.session.get(Budget, int(request.form.get("budget_id", ""))) or abort(404)
+                name = request.form.get("name", "").strip()[:100]
+                owner_type = request.form.get("owner_type", budget.owner_type)
+                member_raw = request.form.get("member_id", str(budget.member_id or "")).strip()
+                member_id = int(member_raw) if member_raw else None
+                category_raw = request.form.get("category_id", str(budget.category_id or "")).strip()
+                category_id = int(category_raw) if category_raw else None
+                amount = money_to_paise(request.form.get("amount", ""))
+                period_type = request.form.get("period_type", budget.period_type)
+                start_date = date.fromisoformat(request.form.get("start_date", "")) if request.form.get("start_date") else budget.start_date
+                if not name or owner_type not in {"family", "individual"} or period_type not in {"monthly", "annual"}:
+                    raise ValueError("Enter a name and valid budget options.")
+                if owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
+                    raise ValueError("Choose an active member for an individual budget.")
+                if category_id and (not db.session.get(Category, category_id) or db.session.get(Category, category_id).kind != "expense"):
+                    raise ValueError("Choose an expense category.")
+                budget.name, budget.owner_type = name, owner_type
+                budget.member_id = member_id if owner_type == "individual" else None
+                budget.category_id, budget.amount_paise, budget.period_type = category_id, amount, period_type
+                budget.spread_monthly = (request.form.get("spread_monthly") == "1" if "spread_monthly" in request.form else budget.spread_monthly) and period_type == "annual"
+                budget.start_date = start_date.replace(month=1, day=1) if period_type == "annual" else start_date.replace(day=1)
+                db.session.commit()
+                flash("Budget updated.", "success")
+                return redirect(url_for("budgets"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Check the budget details.", "error")
+                return redirect(url_for("budgets"))
         if request.method == "POST":
             name = request.form.get("name", "").strip()[:100]
             owner_type = request.form.get("owner_type", "family")
@@ -717,13 +747,14 @@ def register_family_routes(app, db, models, helpers):
                 flash("Budget created.", "success")
                 return redirect(url_for("budgets"))
         budget_rows = []
-        for budget in Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all():
+        show_archived = request.args.get("archived") == "1"
+        for budget in Budget.query.filter_by(is_active=not show_archived).order_by(Budget.owner_type, Budget.name).all():
             row = budget_metrics(budget)
             row["owner_label"] = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             budget_rows.append(row)
         return render_template("budgets.html", budget_rows=budget_rows, people=active_members(),
             categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
-            today=date.today(), month_start=date.today().replace(day=1).isoformat())
+            today=date.today(), month_start=date.today().replace(day=1).isoformat(), show_archived=show_archived)
 
     @app.post("/budgets/<int:budget_id>/toggle")
     @login_required
@@ -738,6 +769,67 @@ def register_family_routes(app, db, models, helpers):
     @app.route("/goals", methods=["GET", "POST"])
     @login_required
     def goals():
+        if request.method == "POST" and request.form.get("action") == "contribute":
+            try:
+                goal = db.session.get(Goal, int(request.form.get("goal_id", ""))) or abort(404)
+                amount = int(goal.monthly_contribution_paise or 0)
+                source = db.session.get(Account, goal.contribution_source_account_id) if goal.contribution_source_account_id else None
+                destination = db.session.get(Account, goal.contribution_destination_account_id) if goal.contribution_destination_account_id else None
+                due = goal.next_contribution_date
+                if not amount or not source or not destination or source.id == destination.id or not due:
+                    raise ValueError("Configure a monthly amount, source, destination and next date first.")
+                if not source.is_active or not destination.is_active or source.account_type == "credit" or destination.account_type == "credit":
+                    raise ValueError("Monthly goal contributions need two active non-credit accounts.")
+                if due > date.today():
+                    raise ValueError("The next monthly contribution is not due yet.")
+                txn = Transaction(transaction_date=date.today(), kind="transfer", amount_paise=amount,
+                    description=("Goal contribution: " + goal.name)[:180], account_id=source.id,
+                    transfer_to_account_id=destination.id, notes="Monthly contribution recorded for goal #" + str(goal.id))
+                db.session.add(txn)
+                goal.next_contribution_date = next_date_after(due, "monthly")
+                db.session.commit()
+                flash("Monthly goal contribution recorded as an account transfer. This updates the app ledger only; it does not move money at your bank.", "success")
+                return redirect(url_for("goals"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Could not record the contribution.", "error")
+                return redirect(url_for("goals"))
+        if request.method == "POST" and request.form.get("action") == "update":
+            try:
+                goal = db.session.get(Goal, int(request.form.get("goal_id", ""))) or abort(404)
+                name = request.form.get("name", "").strip()[:120]
+                owner_type = request.form.get("owner_type", "family")
+                member_id = int(request.form.get("member_id")) if request.form.get("member_id", "").strip() else None
+                target = money_to_paise(request.form.get("target_amount", ""))
+                target_date = date.fromisoformat(request.form.get("target_date", "")) if request.form.get("target_date", "").strip() else None
+                monthly_raw = request.form.get("monthly_contribution", "").strip()
+                monthly_amount = money_to_paise(monthly_raw, allow_zero=True) if monthly_raw else 0
+                source_id = int(request.form.get("contribution_source_account_id")) if request.form.get("contribution_source_account_id", "").strip() else None
+                destination_id = int(request.form.get("contribution_destination_account_id")) if request.form.get("contribution_destination_account_id", "").strip() else None
+                next_raw = request.form.get("next_contribution_date", "").strip()
+                next_contribution_date = date.fromisoformat(next_raw) if next_raw else None
+                if monthly_amount and (not source_id or not destination_id or source_id == destination_id or not next_contribution_date):
+                    raise ValueError("A recurring contribution needs a monthly amount, two different accounts and a next date.")
+                if monthly_amount and any(not db.session.get(Account, aid) or not db.session.get(Account, aid).is_active or db.session.get(Account, aid).account_type == "credit" for aid in (source_id, destination_id)):
+                    raise ValueError("Monthly goal contributions need two active non-credit accounts.")
+                if not name or owner_type not in {"family", "individual"}:
+                    raise ValueError("Enter a goal name and valid owner type.")
+                if owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
+                    raise ValueError("Choose an active member for an individual goal.")
+                goal.name, goal.owner_type = name, owner_type
+                goal.member_id = member_id if owner_type == "individual" else None
+                goal.target_paise, goal.target_date = target, target_date
+                goal.monthly_contribution_paise = monthly_amount
+                goal.contribution_source_account_id = source_id if monthly_amount else None
+                goal.contribution_destination_account_id = destination_id if monthly_amount else None
+                goal.next_contribution_date = next_contribution_date if monthly_amount else None
+                db.session.commit()
+                flash("Goal updated.", "success")
+                return redirect(url_for("goals"))
+            except (ValueError, TypeError) as exc:
+                db.session.rollback()
+                flash(str(exc) or "Check the goal details.", "error")
+                return redirect(url_for("goals"))
         if request.method == "POST":
             action = request.form.get("action", "create")
             if action == "earmark":
@@ -780,6 +872,12 @@ def register_family_routes(app, db, models, helpers):
                     target = money_to_paise(request.form.get("target_amount", ""))
                     member_id = int(member_raw) if member_raw else None
                     target_date = date.fromisoformat(target_date_raw) if target_date_raw else None
+                    monthly_raw = request.form.get("monthly_contribution", "").strip()
+                    monthly_amount = money_to_paise(monthly_raw, allow_zero=True) if monthly_raw else 0
+                    source_id = int(request.form.get("contribution_source_account_id")) if request.form.get("contribution_source_account_id", "").strip() else None
+                    destination_id = int(request.form.get("contribution_destination_account_id")) if request.form.get("contribution_destination_account_id", "").strip() else None
+                    next_raw = request.form.get("next_contribution_date", "").strip()
+                    next_contribution_date = date.fromisoformat(next_raw) if next_raw else None
                 except (ValueError, TypeError):
                     flash("Check the target amount, member and date.", "error")
                     return redirect(url_for("goals"))
@@ -787,22 +885,30 @@ def register_family_routes(app, db, models, helpers):
                     flash("Enter a goal name and valid owner type.", "error")
                 elif owner_type == "individual" and (not member_id or not db.session.get(FamilyMember, member_id) or not db.session.get(FamilyMember, member_id).is_active):
                     flash("Choose an active member for an individual goal.", "error")
+                elif monthly_amount and (not source_id or not destination_id or source_id == destination_id or not next_contribution_date):
+                    flash("A recurring contribution needs a monthly amount, two different accounts and a next date.", "error")
+                elif monthly_amount and any(not db.session.get(Account, aid) or not db.session.get(Account, aid).is_active or db.session.get(Account, aid).account_type == "credit" for aid in (source_id, destination_id)):
+                    flash("Monthly goal contributions need two active non-credit accounts.", "error")
                 else:
                     db.session.add(Goal(name=name, owner_type=owner_type,
                         member_id=member_id if owner_type == "individual" else None,
-                        target_paise=target, target_date=target_date))
+                        target_paise=target, target_date=target_date, monthly_contribution_paise=monthly_amount,
+                        contribution_source_account_id=source_id if monthly_amount else None,
+                        contribution_destination_account_id=destination_id if monthly_amount else None,
+                        next_contribution_date=next_contribution_date if monthly_amount else None))
                     db.session.commit()
                     flash("Goal created.", "success")
                     return redirect(url_for("goals"))
         goal_rows = []
-        for goal in Goal.query.filter_by(is_active=True).order_by(Goal.target_date.is_(None), Goal.target_date, Goal.name).all():
+        show_archived = request.args.get("archived") == "1"
+        for goal in Goal.query.filter_by(is_active=not show_archived).order_by(Goal.target_date.is_(None), Goal.target_date, Goal.name).all():
             earmarks = GoalEarmark.query.filter_by(goal_id=goal.id).all()
             saved = sum(row.amount_paise for row in earmarks)
             goal_rows.append({"goal": goal, "saved": saved, "remaining": max(goal.target_paise - saved, 0),
                 "progress": min(100, round(saved * 100 / goal.target_paise)) if goal.target_paise else 0,
                 "earmarks": earmarks, "owner_label": "Family" if goal.owner_type == "family" else (goal.member.name if goal.member else "Individual")})
         return render_template("goals.html", goal_rows=goal_rows, people=active_members(),
-                               accounts=Account.query.filter(Account.account_type != "credit").order_by(Account.name).all())
+                               accounts=Account.query.filter(Account.account_type != "credit", Account.is_active.is_(True)).order_by(Account.name).all(), show_archived=show_archived, today=date.today())
 
     @app.post("/goals/<int:goal_id>/toggle")
     @login_required
@@ -820,13 +926,46 @@ def register_family_routes(app, db, models, helpers):
         if request.method == "POST":
             action = request.form.get("action", "create")
             try:
+                if action in {"archive", "restore"}:
+                    subscription = db.session.get(Subscription, int(request.form.get("subscription_id", "")))
+                    if not subscription:
+                        raise ValueError("Subscription not found.")
+                    subscription.is_archived = action == "archive"
+                    db.session.commit()
+                    flash("Subscription archived." if subscription.is_archived else "Subscription restored.", "success")
+                    return redirect(url_for("subscriptions", archived="1" if subscription.is_archived else None))
                 if action == "update":
                     subscription = db.session.get(Subscription, int(request.form.get("subscription_id", "")))
                     if not subscription:
                         raise ValueError("Subscription not found.")
+                    subscription.name = request.form.get("name", subscription.name).strip()[:120]
                     subscription.amount_paise = money_to_paise(request.form.get("amount", ""))
                     subscription.next_date = date.fromisoformat(request.form.get("next_date", ""))
                     subscription.is_active = request.form.get("is_active") == "1"
+                    account_id = int(request.form.get("account_id", subscription.account_id))
+                    account = db.session.get(Account, account_id)
+                    if not account or not account.is_active:
+                        raise ValueError("Choose an active account.")
+                    subscription.account_id = account.id
+                    category_raw = request.form.get("category_id", "").strip()
+                    category_id = int(category_raw) if category_raw else None
+                    if category_id and (not db.session.get(Category, category_id) or db.session.get(Category, category_id).kind != "expense"):
+                        raise ValueError("Choose a valid expense category.")
+                    subscription.category_id = category_id
+                    frequency = request.form.get("frequency", subscription.frequency)
+                    interval = int(request.form.get("interval_weeks", subscription.interval_weeks) or subscription.interval_weeks)
+                    if frequency not in {"weekly", "monthly", "annual", "every_n_weeks"} or (frequency == "every_n_weeks" and not 1 <= interval <= 52):
+                        raise ValueError("Choose a valid frequency and interval.")
+                    subscription.frequency, subscription.interval_weeks = frequency, interval
+                    subscription.notes = request.form.get("notes", subscription.notes).strip()[:500]
+                    budget_selection = request.form.get("budget_selection", "family")
+                    budget = None
+                    if budget_selection.startswith("budget:"):
+                        budget = db.session.get(Budget, int(budget_selection.split(":", 1)[1]))
+                        if not budget or not budget.is_active:
+                            raise ValueError("Choose an active budget.")
+                    subscription.budget_id = budget.id if budget else None
+                    subscription.budget_scope = budget.owner_type if budget else "family"
                     db.session.commit()
                     flash("Subscription updated. Only future occurrences use the new amount; historical transactions are unchanged.", "success")
                     return redirect(url_for("subscriptions"))
@@ -867,15 +1006,16 @@ def register_family_routes(app, db, models, helpers):
                 db.session.rollback()
                 flash(str(exc) or "Check subscription details.", "error")
                 return redirect(url_for("subscriptions"))
-        rows = Subscription.query.order_by(Subscription.is_active.desc(), Subscription.next_date, Subscription.name).all()
+        show_archived = request.args.get("archived") == "1"
+        rows = Subscription.query.filter_by(is_archived=show_archived).order_by(Subscription.is_active.desc(), Subscription.next_date, Subscription.name).all()
         options = []
         for budget in Budget.query.filter_by(is_active=True).order_by(Budget.owner_type, Budget.name).all():
             owner = "Family" if budget.owner_type == "family" else (budget.member.name if budget.member else "Individual")
             options.append({"value": f"budget:{budget.id}", "label": f"{owner}: {budget.name}"})
         return render_template("subscriptions.html", subscriptions=rows,
-            accounts=Account.query.order_by(Account.name).all(),
+            accounts=Account.query.filter_by(is_active=True).order_by(Account.name).all(),
             categories=enrich_categories(Category.query.filter_by(kind="expense").order_by(Category.name).all()),
-            budget_options=options, today=date.today().isoformat())
+            budget_options=options, today=date.today().isoformat(), show_archived=show_archived)
 
     @app.route("/cashback-schemes", methods=["GET", "POST"])
     @login_required

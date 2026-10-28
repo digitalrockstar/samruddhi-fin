@@ -47,6 +47,7 @@ class Account(db.Model):
     account_type = db.Column(db.String(20), nullable=False, default="bank")
     opening_balance_paise = db.Column(db.Integer, nullable=False, default=0)
     colour = db.Column(db.String(7), nullable=False, default="#7297d2")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
 
 
@@ -184,9 +185,15 @@ class Goal(db.Model):
     member_id = db.Column(db.Integer, db.ForeignKey("family_member.id"), nullable=True, index=True)
     target_paise = db.Column(db.Integer, nullable=False)
     target_date = db.Column(db.Date, nullable=True)
+    monthly_contribution_paise = db.Column(db.Integer, nullable=False, default=0)
+    contribution_source_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    contribution_destination_account_id = db.Column(db.Integer, db.ForeignKey("account.id"), nullable=True)
+    next_contribution_date = db.Column(db.Date, nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow_naive)
     member = db.relationship("FamilyMember")
+    contribution_source = db.relationship("Account", foreign_keys=[contribution_source_account_id])
+    contribution_destination = db.relationship("Account", foreign_keys=[contribution_destination_account_id])
 
 
 class GoalEarmark(db.Model):
@@ -249,6 +256,7 @@ class Subscription(db.Model):
     interval_weeks = db.Column(db.Integer, nullable=False, default=6)
     next_date = db.Column(db.Date, nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
     notes = db.Column(db.String(500), nullable=False, default="")
     budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True)
     budget_scope = db.Column(db.String(12), nullable=False, default="family")
@@ -372,6 +380,12 @@ def ensure_additive_schema() -> None:
     table_names = set(inspector.get_table_names())
     changes = [
         ("family_member", "username", "VARCHAR(64)"),
+        ("account", "is_active", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        ("goal", "monthly_contribution_paise", "INTEGER NOT NULL DEFAULT 0"),
+        ("goal", "contribution_source_account_id", "INTEGER REFERENCES account(id)"),
+        ("goal", "contribution_destination_account_id", "INTEGER REFERENCES account(id)"),
+        ("goal", "next_contribution_date", "DATE"),
+        ("subscription", "is_archived", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
         ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
@@ -381,7 +395,7 @@ def ensure_additive_schema() -> None:
     ]
     columns_by_table = {
         table: {column["name"] for column in inspector.get_columns(table)}
-        for table in table_names if table in {"family_member", "transaction_metadata", "subscription"}
+        for table in table_names if table in {"family_member", "transaction_metadata", "subscription", "account", "goal"}
     }
     for table, column, definition in changes:
         if table in table_names and column not in columns_by_table.get(table, set()):
@@ -580,7 +594,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         breakdown = [{"name": name, "colour": colour, "amount": int(value or 0),
             "share": round(int(value or 0) * 100 / expense_total) if expense_total else 0}
             for name, colour, value in category_rows]
-        accounts = Account.query.order_by(Account.name).all()
+        accounts = Account.query.filter_by(is_active=True).order_by(Account.name).all()
         card_rows, statement_rows, card_reminders, card_metrics = credit_card_overview()
         return render_template("dashboard.html", month=month, income=int(income or 0),
             expenses=expense_total, cashback_earned=int(cashback_earned or 0),
@@ -724,7 +738,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         return output
 
     def credit_card_overview():
-        card_accounts = Account.query.filter_by(account_type="credit").order_by(Account.name).all()
+        card_accounts = Account.query.filter_by(account_type="credit", is_active=True).order_by(Account.name).all()
         balance_rows = balances_for_accounts(card_accounts)
         balance_by_id = {row["account"].id: row["balance"] for row in balance_rows}
         profiles = {profile.account_id: profile for profile in CreditCardProfile.query.all()}
@@ -919,7 +933,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 db.session.rollback()
                 flash(str(exc) or "Check the credit-card details.", "error")
         card_rows, statement_rows, reminders, metrics = credit_card_overview()
-        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"])).order_by(Account.name).all()
+        payment_accounts = Account.query.filter(Account.account_type.in_(["cash", "bank", "savings"]), Account.is_active.is_(True)).order_by(Account.name).all()
         groups = CreditLimitGroup.query.order_by(CreditLimitGroup.name).all()
         return render_template("credit_cards.html", cards=card_rows, statements=statement_rows, reminders=reminders,
             metrics=metrics, groups=groups, payment_accounts=payment_accounts,
@@ -929,6 +943,29 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def accounts():
         if request.method == "POST":
+            if request.form.get("action") == "update_account":
+                actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+                if not current_app.config.get("TESTING") and (not actor or actor.role != "admin" or actor.username != "akshayp"):
+                    abort(403)
+                try:
+                    account_id = int(request.form.get("account_id", ""))
+                    account = db.session.get(Account, account_id) or abort(404)
+                    name = request.form.get("name", "").strip()[:80]
+                    kind = request.form.get("account_type", "")
+                    opening = money_to_paise(request.form.get("opening_balance", "0"), allow_zero=True)
+                    colour = normalized_colour(request.form.get("colour"))
+                    duplicate = Account.query.filter(func.lower(Account.name) == name.lower(), Account.id != account.id).first()
+                    if not name or duplicate or kind not in ACCOUNT_TYPES:
+                        raise ValueError("Enter a unique account name and valid account type.")
+                    account.name, account.account_type = name, kind
+                    account.opening_balance_paise, account.colour = opening, colour
+                    db.session.commit()
+                    flash("Account updated.", "success")
+                    return redirect(url_for("accounts"))
+                except (ValueError, TypeError) as exc:
+                    db.session.rollback()
+                    flash(str(exc) or "Check the account details.", "error")
+                    return redirect(url_for("accounts"))
             if request.form.get("action") == "save_account_meta":
                 actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
                 if not current_app.config.get("TESTING") and (
@@ -977,10 +1014,23 @@ def create_app(test_config: dict | None = None) -> Flask:
             except (ValueError, TypeError) as exc:
                 db.session.rollback()
                 flash(str(exc) or "Check the account details.", "error")
-        account_list = Account.query.order_by(Account.name).all()
+        show_archived = request.args.get("archived") == "1"
+        account_list = Account.query.filter_by(is_active=not show_archived).order_by(Account.name).all()
         rows = current_app.extensions["family_finance"]["enrich_account_rows"](balances_for_accounts(account_list))
         return render_template("accounts.html", rows=rows,
-            people=current_app.extensions["family_finance"]["active_members"]())
+            people=current_app.extensions["family_finance"]["active_members"](), show_archived=show_archived)
+
+    @app.post("/accounts/<int:account_id>/toggle")
+    @login_required
+    def toggle_account(account_id):
+        actor = db.session.get(FamilyMember, int(session["member_id"])) if session.get("member_id") else None
+        if not current_app.config.get("TESTING") and (not actor or actor.role != "admin" or actor.username != "akshayp"):
+            abort(403)
+        account = db.session.get(Account, account_id) or abort(404)
+        account.is_active = not account.is_active
+        db.session.commit()
+        flash("Account archived." if not account.is_active else "Account restored.", "success")
+        return redirect(url_for("accounts"))
 
     @app.route("/categories", methods=["GET", "POST"])
     @login_required

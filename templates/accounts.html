@@ -3,7 +3,7 @@
 {% block content %}
 <section class="page-heading"><div><div class="eyebrow">YOUR MONEY SPACES</div><h1>Accounts</h1><p class="subheading">The owner is the default payer. Purpose tags describe how an account is used.</p></div></section>
 <div class="accounts-layout">
-<section class="account-cards">
+<div class="record-view-toggle"><a class="text-link" href="{{ url_for('accounts', archived=1 if not show_archived else 0) }}">{{ "View active accounts" if show_archived else "View archived accounts" }}</a></div><section class="account-cards">
 {% for row in rows %}
 <article class="account-card panel">
 <div class="account-card-top"><span class="account-avatar large" style="--swatch:{{ row.account.colour }}">{{ row.account.name[:1] }}</span><span class="account-type">{{ row.account.account_type|title }}</span></div>
@@ -18,6 +18,11 @@
 {% else %}
 <div class="account-owner-form"><div class="finance-meta"><span>OWNER / PAYER</span><strong>{{ row.owner.name if row.owner else 'Shared family account' }}</strong></div><div class="purpose-tag-grid"><span class="field-label">PURPOSE TAGS</span>{% for tag in row.tag_labels %}<span class="pill">{{ tag }}</span>{% else %}<span class="finance-muted">No purpose tags</span>{% endfor %}</div></div>
 {% endif %}
+<div class="finance-card-actions">
+{% if current_member and current_member.username == 'akshayp' and current_member.role == 'admin' %}
+<details><summary class="text-link">Edit account</summary><form method="post" class="stack-form record-edit-form"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update_account"><input type="hidden" name="account_id" value="{{ row.account.id }}"><label class="field"><span>ACCOUNT NAME</span><input name="name" maxlength="80" value="{{ row.account.name }}" required></label><label class="field"><span>ACCOUNT TYPE</span><select name="account_type">{% for type in ['cash','bank','savings','credit','investment','other'] %}<option value="{{ type }}" {% if row.account.account_type == type %}selected{% endif %}>{{ type|title }}</option>{% endfor %}</select></label><label class="field"><span>OPENING BALANCE / AMOUNT OWED · INR</span><input name="opening_balance" type="number" min="0" step="0.01" value="{{ '%.2f'|format(row.account.opening_balance_paise/100) }}" required></label><label class="field"><span>COLOUR</span><input name="colour" type="color" value="{{ row.account.colour }}"></label><button class="icon-button primary" type="submit" title="Save changes" aria-label="Save account changes">✓</button></form></details>
+<form method="post" action="{{ url_for('toggle_account', account_id=row.account.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="icon-button {% if row.account.is_active %}danger{% endif %}" type="submit" title="{{ 'Archive' if row.account.is_active else 'Restore' }} account" aria-label="{{ 'Archive' if row.account.is_active else 'Restore' }} {{ row.account.name }}">{{ '×' if row.account.is_active else '↻' }}</button></form>
+{% endif %}</div>
 </article>
 {% endfor %}
 </section>
