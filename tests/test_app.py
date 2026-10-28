@@ -356,6 +356,11 @@ def test_credit_cards_use_transaction_ledger_for_payments_and_limits(client, app
         assert payment.kind == "transfer"
         assert payment.category_id == cc_payment_id
         assert payment.transfer_to_account_id == main_card_id
+        payment_id_for_edit = payment.id
+
+    edit_page = client.get(f"/transactions/{payment_id_for_edit}/edit")
+    assert edit_page.status_code == 200
+    assert b"CC Payment" in edit_page.data
 
     card_page = client.get("/credit-cards")
     assert b"170.00" in card_page.data
