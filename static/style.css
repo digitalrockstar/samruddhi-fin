@@ -651,3 +651,7 @@ details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margi
 .create-record-dialog .stack-form{gap:15px}
 .create-record-dialog .field-grid{gap:12px}
 @media(max-width:600px){.create-record-dialog>.panel{padding:19px 15px}.create-dialog-heading{margin-bottom:17px}.create-record-dialog .field-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Mobile pinned navigation active state. */
+.mobile-footer>a.active{color:var(--accent-strong);font-weight:800}
+.mobile-footer .mobile-add{font-family:Manrope,sans-serif;font-weight:500;line-height:1}
