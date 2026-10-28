@@ -120,3 +120,13 @@
   .goals-panel { padding: 16px; }
   .goals-panel .panel-heading { margin-bottom: 16px; }
 }
+
+/* List panels need their own inset even when their list is empty */
+.panel:has(> .finance-card-grid) { padding: 22px; }
+.panel:has(> .finance-card-grid) > .panel-heading { margin-bottom: 20px; }
+.panel:has(> .finance-card-grid) > .finance-card-grid { margin-top: 0; }
+.panel:has(> .finance-card-grid) > .empty-state { margin: 18px auto 8px; padding: 22px; }
+@media (max-width: 680px) {
+  .panel:has(> .finance-card-grid) { padding: 16px; }
+  .panel:has(> .finance-card-grid) > .empty-state { padding: 14px; }
+}
