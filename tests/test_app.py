@@ -466,6 +466,13 @@ def test_cashback_waits_for_approval_and_credits_selected_destination(app, clien
         assert posted.account_id == destination_id
         assert db.session.get(TransactionMetadata, posted.id).source == "cashback"
         assert Transaction.query.filter_by(account_id=destination_id, kind="income").count() == 1
+        posted_id = posted.id
+
+    response = post_form(client, f"/transactions/{posted_id}/archive", {}, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"linked to its approval" in response.data
+    with app.app_context():
+        assert db.session.get(Transaction, posted_id).is_archived is False
 
 
 def test_family_finance_screens_render(client):
@@ -474,3 +481,46 @@ def test_family_finance_screens_render(client):
                  "/credit-cards", "/transactions/new"):
         response = client.get(path)
         assert response.status_code == 200, (path, response.status_code, response.data[:500])
+
+
+def test_cashback_to_card_reduces_owed_balance_and_is_not_regular_income(app, client):
+    with app.app_context():
+        card = Account.query.filter_by(name="Credit card").one()
+        scheme = CashbackScheme(name="x2504 FK reward", account_id=card.id, merchant_keyword="FK",
+            rate_bps=500, destination_account_id=card.id, delay_days=0)
+        db.session.add(scheme)
+        db.session.commit()
+        card_id = card.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "2000.00", "description": "FK purchase",
+        "transaction_date": date.today().isoformat(), "account_id": str(card_id),
+        "category_id": "", "notes": "", "budget_selection": "family",
+        "cashback_scheme_id": "", "cashback_rate": "", "cashback_destination_account_id": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        source = Transaction.query.filter_by(description="FK purchase").one()
+        event = CashbackEvent.query.filter_by(transaction_id=source.id).one()
+        assert event.expected_paise == 10000
+        event_id = event.id
+
+    response = post_form(client, "/approvals", {
+        "event_id": str(event_id), "action": "approve", "actual_amount": "100.00",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Cashback received" in response.data
+    assert b"Money in" in response.data
+    with app.app_context():
+        rows = current_app.extensions["family_finance"]["decorate_transactions"](
+            Transaction.query.filter_by(account_id=card_id).all())
+        card = db.session.get(Account, card_id)
+        assert card.opening_balance_paise == 0
+        # Credit-card purchases increase debt; cashback applied to that same card reduces it.
+        assert b"₹1,900.00" in client.get("/accounts").data
+        posted_event = db.session.get(CashbackEvent, event_id)
+        posted = db.session.get(Transaction, posted_event.posted_transaction_id)
+        assert posted.kind == "income" and posted.account_id == card_id
+        dashboard = client.get("/")
+        assert b"₹2,000.00" in dashboard.data
+        assert b"₹100.00" in dashboard.data
