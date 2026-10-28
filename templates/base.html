@@ -19,6 +19,7 @@
       <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><span class="nav-icon">⌂</span><span>Overview</span></a>
       <a class="nav-link {% if request.endpoint in ['transactions','transaction_new','transaction_edit'] %}active{% endif %}" href="{{ url_for('transactions') }}"><span class="nav-icon">⇄</span><span>Transactions</span></a>
       <a class="nav-link {% if request.endpoint == 'accounts' %}active{% endif %}" href="{{ url_for('accounts') }}"><span class="nav-icon">▤</span><span>Accounts</span></a>
+      <a class="nav-link {% if request.endpoint == 'credit_cards' %}active{% endif %}" href="{{ url_for('credit_cards') }}"><span class="nav-icon">▣</span><span>Credit cards</span></a>
       <a class="nav-link {% if request.endpoint == 'categories' %}active{% endif %}" href="{{ url_for('categories') }}"><span class="nav-icon">◈</span><span>Categories</span></a>
     </nav>
     <div class="sidebar-bottom">
@@ -50,7 +51,7 @@
       <a href="{{ url_for('transactions') }}">⇄<small>Activity</small></a>
       <a class="mobile-add" href="{{ url_for('transaction_new') }}" aria-label="Add transaction">＋</a>
       <a href="{{ url_for('accounts') }}">▤<small>Accounts</small></a>
-      <a href="{{ url_for('categories') }}">◈<small>Categories</small></a>
+      <a href="{{ url_for('credit_cards') }}">▣<small>Cards</small></a>
     </footer>
   </main>
 </div>
