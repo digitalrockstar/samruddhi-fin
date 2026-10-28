@@ -19,9 +19,13 @@
   let savedTheme = "mint";
   try { savedTheme = window.localStorage.getItem("samruddhi-theme") || "mint"; } catch (_) {}
   applyTheme(savedTheme);
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-theme-choice]");
-    if (button) applyTheme(button.dataset.themeChoice);
+  // Bind directly to the theme buttons so other delegated click handlers
+  // cannot prevent the user's theme selection from being applied.
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      applyTheme(button.dataset.themeChoice);
+    });
   });
   const form = document.querySelector("#transaction-form");
   if (form) {
