@@ -234,24 +234,23 @@
 }
 
 
-/* Four-column card grids in landscape/desktop; two columns in portrait/mobile. */
-.summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-.finance-card-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-.account-cards{grid-template-columns:repeat(4,minmax(0,1fr))}
-.cc-card-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:760px){
-  .summary-grid,.finance-card-grid,.account-cards,.cc-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Dashboard-only four-up summary cards. Other pages keep their own card layouts. */
+@media(min-width:1101px){
+  .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(min-width:641px) and (max-width:1100px){
+  .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:640px){
   .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .finance-card-grid,.account-cards,.cc-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .summary-grid>.summary-card{grid-column:auto!important}
 }
-@media(orientation:portrait) and (max-width:900px){
-  .summary-grid,.finance-card-grid,.account-cards,.cc-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Account cards stay roomy instead of inheriting the dashboard's four-column grid. */
+.account-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:640px){
+  .account-cards{grid-template-columns:1fr}
 }
-
-
-/* Make the selected theme obvious and keep the picker clickable above nearby UI. */
+/* Theme picker gets a real event handler in base.html and a visible active state. */
 .theme-picker{position:relative;z-index:30}
 .theme-dot{position:relative;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,outline-color .16s ease}
 .theme-dot.is-selected{outline:2px solid var(--accent-strong);outline-offset:3px;box-shadow:0 0 0 5px var(--accent-soft)}
