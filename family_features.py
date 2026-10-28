@@ -686,11 +686,13 @@ def register_family_routes(app, db, models, helpers):
             try:
                 budget = db.session.get(Budget, int(request.form.get("budget_id", ""))) or abort(404)
                 name = request.form.get("name", "").strip()[:100]
-                owner_type = request.form.get("owner_type", "family")
-                member_id = int(request.form.get("member_id")) if request.form.get("member_id", "").strip() else None
-                category_id = int(request.form.get("category_id")) if request.form.get("category_id", "").strip() else None
+                owner_type = request.form.get("owner_type", budget.owner_type)
+                member_raw = request.form.get("member_id", str(budget.member_id or "")).strip()
+                member_id = int(member_raw) if member_raw else None
+                category_raw = request.form.get("category_id", str(budget.category_id or "")).strip()
+                category_id = int(category_raw) if category_raw else None
                 amount = money_to_paise(request.form.get("amount", ""))
-                period_type = request.form.get("period_type", "monthly")
+                period_type = request.form.get("period_type", budget.period_type)
                 start_date = date.fromisoformat(request.form.get("start_date", "")) if request.form.get("start_date") else budget.start_date
                 if not name or owner_type not in {"family", "individual"} or period_type not in {"monthly", "annual"}:
                     raise ValueError("Enter a name and valid budget options.")
@@ -701,7 +703,7 @@ def register_family_routes(app, db, models, helpers):
                 budget.name, budget.owner_type = name, owner_type
                 budget.member_id = member_id if owner_type == "individual" else None
                 budget.category_id, budget.amount_paise, budget.period_type = category_id, amount, period_type
-                budget.spread_monthly = request.form.get("spread_monthly") == "1" and period_type == "annual"
+                budget.spread_monthly = (request.form.get("spread_monthly") == "1" if "spread_monthly" in request.form else budget.spread_monthly) and period_type == "annual"
                 budget.start_date = start_date.replace(month=1, day=1) if period_type == "annual" else start_date.replace(day=1)
                 db.session.commit()
                 flash("Budget updated.", "success")
