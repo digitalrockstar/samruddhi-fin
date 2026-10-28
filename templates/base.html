@@ -24,7 +24,7 @@
       <a class="nav-link {% if request.endpoint == 'goals' %}active{% endif %}" href="{{ url_for('goals') }}"><span class="nav-icon">◎</span><span>Goals</span></a>
       <a class="nav-link {% if request.endpoint == 'subscriptions' %}active{% endif %}" href="{{ url_for('subscriptions') }}"><span class="nav-icon">◷</span><span>Subscriptions</span></a>
       <a class="nav-link {% if request.endpoint == 'approvals' %}active{% endif %}" href="{{ url_for('approvals') }}"><span class="nav-icon">✓</span><span>Approvals</span></a>
-      <a class="nav-link {% if request.endpoint == 'people' %}active{% endif %}" href="{{ url_for('people') }}"><span class="nav-icon">♙</span><span>People</span></a>
+      {% if current_member and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'people' %}active{% endif %}" href="{{ url_for('people') }}"><span class="nav-icon">♙</span><span>People</span></a>{% endif %}
       <a class="nav-link {% if request.endpoint == 'categories' %}active{% endif %}" href="{{ url_for('categories') }}"><span class="nav-icon">◈</span><span>Categories</span></a>
       {% if current_member and current_member.role == 'admin' %}<a class="nav-link {% if request.endpoint == 'cashback_schemes' %}active{% endif %}" href="{{ url_for('cashback_schemes') }}"><span class="nav-icon">%</span><span>Cashback schemes</span></a>{% endif %}
     </nav>
@@ -44,7 +44,7 @@
         <button type="button" class="theme-dot violet" data-theme-choice="violet" aria-label="Violet theme"></button>
         <button type="button" class="theme-dot peach" data-theme-choice="peach" aria-label="Peach theme"></button>
       </div>
-      <a class="avatar" href="{{ url_for('people') }}" aria-label="Family member settings">{{ current_member.name[:1]|upper if current_member else 'S' }}</a>
+      <a class="avatar" href="{{ url_for('change_password') }}" aria-label="Change password" title="Change password">{{ current_member.name[:1]|upper if current_member else 'S' }}</a>
     </header>
     <div class="page-content">
       {% with messages = get_flashed_messages(with_categories=true) %}
