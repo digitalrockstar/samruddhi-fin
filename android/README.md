@@ -2,7 +2,7 @@
 
 This is a lightweight Android WebView wrapper for the hosted app at:
 
-https://samruddhi-fin.onrender.com
+https://samruddhi-fin-y8m9.onrender.com
 
 ## Build an APK
 
