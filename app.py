@@ -1209,6 +1209,9 @@ def create_app(test_config: dict | None = None) -> Flask:
                 TransactionMetadata.query.delete(synchronize_session=False)
                 GoalEarmark.query.delete(synchronize_session=False)
                 CashbackEvent.query.delete(synchronize_session=False)
+                if preserve_setup:
+                    Subscription.query.filter(Subscription.created_from_transaction_id.is_not(None)).update(
+                        {Subscription.created_from_transaction_id: None}, synchronize_session=False)
                 Transaction.query.delete(synchronize_session=False)
                 CreditCardStatement.query.delete(synchronize_session=False)
                 ImportBatch.query.delete(synchronize_session=False)
@@ -1233,6 +1236,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                     CashbackEvent.posted_transaction_id.in_(txn_ids) if txn_ids else text("1=0")))
                 related_event_ids = [value for (value,) in related_event_query.with_entities(CashbackEvent.id).all()]
                 if txn_ids:
+                    Subscription.query.filter(Subscription.created_from_transaction_id.in_(txn_ids)).update(
+                        {Subscription.created_from_transaction_id: None}, synchronize_session=False)
                     SubscriptionOccurrence.query.filter(SubscriptionOccurrence.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
                     TransactionMetadata.query.filter(TransactionMetadata.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
                     TransactionBeneficiary.query.filter(TransactionBeneficiary.transaction_id.in_(txn_ids)).delete(synchronize_session=False)
