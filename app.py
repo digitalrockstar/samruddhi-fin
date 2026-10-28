@@ -799,6 +799,11 @@ def create_app(test_config: dict | None = None) -> Flask:
                         transfer_to_account_id=statement.account_id, notes=f"Statement payment for {statement.statement_month}")
                     db.session.add(txn)
                     db.session.flush()
+                    source_owner = AccountOwner.query.filter_by(account_id=source.id).first()
+                    db.session.add(TransactionMetadata(
+                        transaction_id=txn.id, budget_scope="family", source="statement_payment",
+                        payer_member_id=source_owner.member_id if source_owner else None,
+                        payer_snapshot_set=True))
                     db.session.add(StatementPayment(statement_id=statement.id, transaction_id=txn.id, amount_paise=amount))
                     db.session.commit()
                     flash("Card statement payment recorded and linked to its bank transfer.", "success")
