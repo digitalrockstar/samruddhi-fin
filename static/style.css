@@ -655,3 +655,6 @@ details.inline-edit-modal[open]>summary::after{content:"×";font-size:22px;margi
 /* Mobile pinned navigation active state. */
 .mobile-footer>a.active{color:var(--accent-strong);font-weight:800}
 .mobile-footer .mobile-add{font-family:Manrope,sans-serif;font-weight:500;line-height:1}
+
+/* Accounts page: keep cards to two columns on wide/landscape layouts. */
+@media(min-width:1200px){.account-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
