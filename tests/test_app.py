@@ -1,9 +1,10 @@
 import io
 import re
+from datetime import date, timedelta
 
 import pytest
 
-from app import Account, Category, Transaction, create_app, db, money_to_paise
+from app import Account, Category, CreditCardProfile, CreditCardStatement, CreditLimitGroup, Transaction, create_app, db, money_to_paise
 
 
 @pytest.fixture()
@@ -207,3 +208,111 @@ def test_credit_card_purchases_increase_amount_owed_and_payments_reduce_it(clien
     assert account_page.status_code == 200
     assert b"Amount owed" in account_page.data
     assert b"\xe2\x82\xb9900.00" in account_page.data
+
+
+def test_credit_cards_support_shared_limits_statements_reminders_and_payments(client, app):
+    with app.app_context():
+        main_card = Account.query.filter_by(name="Credit card").one()
+        second_card = Account(name="Add-on card", account_type="credit", colour="#7297d2")
+        category = Category.query.filter_by(name="Groceries").one()
+        main_card_id, category_id = main_card.id, category.id
+        db.session.add(second_card)
+        db.session.commit()
+        second_card_id = second_card.id
+
+    response = post_form(client, "/credit-cards", {
+        "action": "create_group", "group_name": "Family shared limit", "group_limit": "1000",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        group_id = CreditLimitGroup.query.filter_by(name="Family shared limit").one().id
+
+    for card_id in (main_card_id, second_card_id):
+        response = post_form(client, "/credit-cards", {
+            "action": "save_profile", "account_id": str(card_id), "limit_mode": "shared",
+            "shared_group_id": str(group_id), "statement_day": "5", "due_day": "25",
+        }, token_path="/credit-cards", follow_redirects=True)
+        assert response.status_code == 200
+
+    with app.app_context():
+        db.session.add_all([
+            Transaction(transaction_date=date.today(), kind="expense", amount_paise=12000,
+                description="Primary card purchase", account_id=main_card_id, category_id=category_id),
+            Transaction(transaction_date=date.today(), kind="expense", amount_paise=8000,
+                description="Add-on card purchase", account_id=second_card_id, category_id=category_id),
+        ])
+        db.session.commit()
+
+    due_date, statement_date = date.today() + timedelta(days=2), date.today()
+    response = post_form(client, "/credit-cards", {
+        "action": "save_statement", "account_id": str(main_card_id),
+        "statement_month": statement_date.strftime("%Y-%m"), "statement_date": statement_date.isoformat(),
+        "due_date": due_date.isoformat(), "total_due": "100.00", "minimum_due": "25.00", "notes": "",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Payment due in 2 days" in response.data
+    assert b"200.00" in response.data
+    assert b"800.00" in response.data
+
+    with app.app_context():
+        statement_id = CreditCardStatement.query.filter_by(account_id=main_card_id).one().id
+        bank_id = Account.query.filter_by(name="Main bank").one().id
+    response = post_form(client, "/credit-cards", {
+        "action": "record_payment", "statement_id": str(statement_id),
+        "payment_account_id": str(bank_id), "payment_amount": "30.00",
+        "payment_date": date.today().isoformat(),
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"statement payment recorded" in response.data
+    assert b"70.00" in response.data
+    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in response.data
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb970.00</strong>" in response.data
+    with app.app_context():
+        statement = db.session.get(CreditCardStatement, statement_id)
+        payment = Transaction.query.filter_by(kind="transfer", transfer_to_account_id=main_card_id).one()
+        profile = CreditCardProfile.query.filter_by(account_id=second_card_id).one()
+        payment_id = payment.id
+        assert statement.total_due_paise == 10000
+        assert profile.limit_mode == "shared"
+        assert payment.description.startswith("Credit card payment")
+
+    response = post_form(client, f"/transactions/{payment_id}/archive", {}, follow_redirects=True)
+    assert response.status_code == 200
+    archived_page = client.get("/credit-cards").data
+    assert b"<small>Paid</small><strong>\xe2\x82\xb90.00</strong>" in archived_page
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb9100.00</strong>" in archived_page
+    response = post_form(client, f"/transactions/{payment_id}/restore", {}, follow_redirects=True)
+    assert response.status_code == 200
+    restored_page = client.get("/credit-cards").data
+    assert b"<small>Paid</small><strong>\xe2\x82\xb930.00</strong>" in restored_page
+    assert b"<small>Remaining</small><strong>\xe2\x82\xb970.00</strong>" in restored_page
+
+    with app.app_context():
+        statement = db.session.get(CreditCardStatement, statement_id)
+        statement.due_date = date.today()
+        db.session.commit()
+    assert b"Payment due today" in client.get("/credit-cards").data
+    with app.app_context():
+        statement = db.session.get(CreditCardStatement, statement_id)
+        statement.due_date = date.today() - timedelta(days=1)
+        db.session.commit()
+    assert b"Overdue by 1 day(s)" in client.get("/credit-cards").data
+
+    response = post_form(client, "/credit-cards", {
+        "action": "save_profile", "account_id": str(second_card_id), "limit_mode": "individual",
+        "individual_limit": "500.00", "statement_day": "10", "due_day": "28",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    with app.app_context():
+        profile = CreditCardProfile.query.filter_by(account_id=second_card_id).one()
+        assert profile.limit_mode == "individual"
+        assert profile.individual_limit_paise == 50000
+
+    response = post_form(client, "/credit-cards", {
+        "action": "update_group", "group_id": str(group_id),
+        "group_name": "Updated family group", "group_limit": "1100.00",
+    }, token_path="/credit-cards", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Shared credit limit group updated" in response.data
+    assert b"Updated family group" in response.data
+    assert b"1100.00" in response.data

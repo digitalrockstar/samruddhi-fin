@@ -28,6 +28,41 @@
     form.querySelectorAll('input[name="kind"]').forEach((input) => input.addEventListener("change", updateKind));
     updateKind();
   }
+  document.querySelectorAll(".cc-config-form").forEach((configForm) => {
+    const select = configForm.querySelector("[data-limit-mode]");
+    const updateLimitMode = () => {
+      configForm.dataset.mode = select?.value === "shared" ? "shared" : "individual";
+    };
+    select?.addEventListener("change", updateLimitMode);
+    updateLimitMode();
+  });
+  const statementForm = document.querySelector('form input[name="action"][value="save_statement"]')?.closest("form");
+  if (statementForm) {
+    const cardSelect = statementForm.querySelector("#cc-statement-card");
+    const statementDate = statementForm.querySelector("#cc-statement-date");
+    const dueDate = statementForm.querySelector("#cc-due-date");
+    const suggestDueDate = () => {
+      if (!cardSelect || !statementDate || !dueDate || !statementDate.value) return;
+      const [year, month, day] = statementDate.value.split("-").map(Number);
+      const statementDay = Number(day);
+      const configuredDueDay = Number(cardSelect.selectedOptions[0]?.dataset.dueDay || 20);
+      let dueYear = year;
+      let dueMonth = month - 1;
+      if (configuredDueDay <= statementDay) {
+        dueMonth += 1;
+        if (dueMonth > 11) { dueMonth = 0; dueYear += 1; }
+      }
+      const suggested = new Date(dueYear, dueMonth, configuredDueDay);
+      dueDate.value = [
+        suggested.getFullYear(),
+        String(suggested.getMonth() + 1).padStart(2, "0"),
+        String(suggested.getDate()).padStart(2, "0")
+      ].join("-");
+    };
+    cardSelect?.addEventListener("change", suggestDueDate);
+    statementDate?.addEventListener("change", suggestDueDate);
+    suggestDueDate();
+  }
   document.querySelectorAll("form[data-confirm]").forEach((formElement) => {
     formElement.addEventListener("submit", (event) => {
       if (!window.confirm(formElement.dataset.confirm)) event.preventDefault();
