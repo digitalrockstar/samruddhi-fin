@@ -37,6 +37,7 @@
     const rateInput = form.querySelector("#cashback-rate");
     const destinationSelect = form.querySelector("#cashback-destination");
     const delayInput = form.querySelector("#cashback-delay");
+    const descriptionInput = form.querySelector('input[name="description"]');
 
     const updateKindAndExtras = () => {
       updateKind();
@@ -81,8 +82,23 @@
     subscriptionFrequency?.addEventListener("change", updateKindAndExtras);
     splitMethod?.addEventListener("change", updateBeneficiaryRows);
     form.querySelectorAll('input[name="beneficiary_ids"]').forEach((input) => input.addEventListener("change", updateBeneficiaryRows));
+    const autoPickCashbackScheme = () => {
+      filterCashbackSchemes();
+      if (!schemeSelect || schemeSelect.value || rateInput?.value || destinationSelect?.value) return;
+      const description = (descriptionInput?.value || "").toLowerCase();
+      const accountId = accountSelect?.value;
+      const options = [...schemeSelect.options].filter((option) =>
+        option.value && option.dataset.accountId === accountId &&
+        option.dataset.keyword && description.includes(option.dataset.keyword.toLowerCase())
+      ).sort((a, b) => (b.dataset.keyword || "").length - (a.dataset.keyword || "").length);
+      if (options.length) {
+        schemeSelect.value = options[0].value;
+        filterCashbackSchemes();
+      }
+    };
     schemeSelect?.addEventListener("change", filterCashbackSchemes);
-    accountSelect?.addEventListener("change", filterCashbackSchemes);
+    accountSelect?.addEventListener("change", autoPickCashbackScheme);
+    descriptionInput?.addEventListener("input", autoPickCashbackScheme);
     updateKindAndExtras();
   }
 
