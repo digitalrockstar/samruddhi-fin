@@ -256,6 +256,7 @@ class Subscription(db.Model):
     interval_weeks = db.Column(db.Integer, nullable=False, default=6)
     next_date = db.Column(db.Date, nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False)
     notes = db.Column(db.String(500), nullable=False, default="")
     budget_id = db.Column(db.Integer, db.ForeignKey("budget.id"), nullable=True)
     budget_scope = db.Column(db.String(12), nullable=False, default="family")
@@ -384,6 +385,7 @@ def ensure_additive_schema() -> None:
         ("goal", "contribution_source_account_id", "INTEGER REFERENCES account(id)"),
         ("goal", "contribution_destination_account_id", "INTEGER REFERENCES account(id)"),
         ("goal", "next_contribution_date", "DATE"),
+        ("subscription", "is_archived", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("transaction_metadata", "payer_member_id", "INTEGER REFERENCES family_member(id)"),
         ("transaction_metadata", "payer_snapshot_set", "BOOLEAN NOT NULL DEFAULT FALSE"),
         ("subscription", "cashback_scheme_id", "INTEGER REFERENCES cashback_scheme(id)"),
