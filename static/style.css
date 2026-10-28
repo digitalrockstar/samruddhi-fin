@@ -436,3 +436,30 @@
 @media(prefers-reduced-motion:no-preference){
   body,.sidebar,.panel,.summary-card,.mobile-footer,.nav-link{transition:background-color .16s ease,color .16s ease,border-color .16s ease}
 }
+
+/* Final dark theme coverage for secondary surfaces and less common pages. */
+:root[data-theme="dark"] .theme-dot.dark{background:#171b1a;border-color:#d7b15e}
+:root[data-theme="dark"] .theme-dot.is-selected::after{content:"";position:absolute;width:5px;height:5px;border-radius:50%;background:#fff;inset:0;margin:auto}
+:root[data-theme="dark"] .mobile-footer{background:rgba(23,27,26,.96)}
+:root[data-theme="dark"] .mobile-footer .mobile-add{color:#171b1a}
+:root[data-theme="dark"] .amount-positive{color:#8bd4a0!important}
+:root[data-theme="dark"] .amount-negative,
+:root[data-theme="dark"] .link-danger{color:#f0a987!important}
+:root[data-theme="dark"] .status-pill.warning,
+:root[data-theme="dark"] .cc-status.warning{background:#4a3925;color:#f1ca8b}
+:root[data-theme="dark"] .status-pill.positive,
+:root[data-theme="dark"] .cc-status.paid{background:#293d31;color:#b2e4bf}
+:root[data-theme="dark"] .status-pill.neutral{background:#303833;color:#c0cbc3}
+:root[data-theme="dark"] .avatar{background:var(--accent-soft);color:var(--accent-strong)}
+:root[data-theme="dark"] .reset-preview,
+:root[data-theme="dark"] .check-row,
+:root[data-theme="dark"] .preference-panel,
+:root[data-theme="dark"] .cc-statement,
+:root[data-theme="dark"] .cc-group-edit-card{border-color:var(--line)}
+:root[data-theme="dark"] .upload-form input[type=file]{background:#1b211e;color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .account-avatar{background:color-mix(in srgb,var(--swatch) 26%,#202624)}
+:root[data-theme="dark"] .login-panel{background:var(--panel);border:1px solid var(--line);border-radius:18px}
+:root[data-theme="dark"] .login-body{background:var(--bg)}
+:root[data-theme="dark"] .field input::placeholder,
+:root[data-theme="dark"] .field textarea::placeholder,
+:root[data-theme="dark"] .search-field input::placeholder{color:#829188}
