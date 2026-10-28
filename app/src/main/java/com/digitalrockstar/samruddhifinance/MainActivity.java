@@ -22,8 +22,8 @@ import android.widget.ProgressBar;
 import android.graphics.Color;
 
 public class MainActivity extends Activity {
-    private static final String HOME_URL = "https://samruddhi-fin.onrender.com";
-    private static final String APP_HOST = "samruddhi-fin.onrender.com";
+    private static final String HOME_URL = "https://samruddhi-fin-y8m9.onrender.com";
+    private static final String APP_HOST = "samruddhi-fin-y8m9.onrender.com";
     private WebView webView;
     private ProgressBar progressBar;
     private ValueCallback<Uri[]> fileChooserCallback;
