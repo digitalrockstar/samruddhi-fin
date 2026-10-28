@@ -149,3 +149,62 @@ def test_password_gate(monkeypatch, tmp_path):
                            follow_redirects=True)
     assert response.status_code == 200
     assert b"Net cash flow" in response.data
+
+
+
+def test_archiving_is_reversible_and_removes_transaction_from_active_views(client, app):
+    with app.app_context():
+        cash = Account.query.filter_by(name="Cash").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        cash_id, category_id = cash.id, category.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "125.00", "description": "Archive test purchase",
+        "transaction_date": "2026-10-10", "account_id": str(cash_id),
+        "category_id": str(category_id), "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    with app.app_context():
+        txn_id = Transaction.query.filter_by(description="Archive test purchase").one().id
+
+    response = post_form(client, f"/transactions/{txn_id}/archive", {}, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Transaction archived" in response.data
+    assert b"Archive test purchase" not in client.get("/transactions?month=2026-10").data
+    assert b"Archive test purchase" in client.get("/transactions?month=2026-10&archived=1").data
+
+    response = post_form(client, f"/transactions/{txn_id}/restore", {}, follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Transaction restored" in response.data
+    assert b"Archive test purchase" in client.get("/transactions?month=2026-10").data
+    with app.app_context():
+        assert db.session.get(Transaction, txn_id).is_archived is False
+
+
+def test_credit_card_purchases_increase_amount_owed_and_payments_reduce_it(client, app):
+    with app.app_context():
+        credit = Account.query.filter_by(name="Credit card").one()
+        bank = Account.query.filter_by(name="Main bank").one()
+        category = Category.query.filter_by(name="Groceries").one()
+        credit_id, bank_id, category_id = credit.id, bank.id, category.id
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "expense", "amount": "1200.00", "description": "Card purchase",
+        "transaction_date": "2026-10-05", "account_id": str(credit_id),
+        "category_id": str(category_id), "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    response = post_form(client, "/transactions/new", {
+        "kind": "transfer", "amount": "300.00", "description": "Card payment",
+        "transaction_date": "2026-10-06", "account_id": str(bank_id),
+        "transfer_to_account_id": str(credit_id), "category_id": "", "notes": "",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    account_page = client.get("/accounts")
+    assert account_page.status_code == 200
+    assert b"Amount owed" in account_page.data
+    assert b"\xe2\x82\xb9 900.00" not in account_page.data
+    assert b"\xe2\x82\xb9900.00" in account_page.data
