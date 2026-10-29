@@ -2,7 +2,7 @@ Context:
 Samruddhi is our home mnemonic. This repo is for personal household finance tracking - incomes, expenses and credit card management. We are keeping it manual for now. Current version is V1 is all things displayed in isolation. The ideal functionality expected out of app is as below (identify if there are gaps or questions in these requirements). I
 
 Tech:
-Keep in mind - to be hosted on Render and db powered by Neon, Postgres.
+Keep in mind - to be hosted on Render and db powered by Neon, Postgres. Keep the SECRET, DATABASE_URL and PYTHON_VERSION (if needed) as environment variables. In absense, work on local SQLite db.
 Stack can be suggested by you as needed.
 
 1. Dashboard.
@@ -104,3 +104,4 @@ This will have 3 options.
 
 
 Everythingg in the app should be zero sum. If a value appears in the transactions, it should be considered. One specific value should be present in each accounts stating "starting balance" to adjust for current snapshot at time of launching the app.
+Create tests required to test the rules and logic handling as well.
