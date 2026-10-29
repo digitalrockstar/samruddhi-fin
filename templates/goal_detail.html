@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, progress, acct_options %}
+{% block title %}{{ goal.name }} · Samruddhi{% endblock %}
+{% block content %}
+{% call head(goal.name, (goal.owner.name if goal.owner else 'Shared goal'), back=url_for('settings.goals'), back_label='Goals') %}{% if can_manage %}<a class="btn sec sm" href="{{ url_for('settings.goal_form', gid=goal.id) }}">Edit</a>{% endif %}{% endcall %}
+<div class="card stat hero"><div class="l">Saved</div><div class="v num">{{ s.saved|inr }}</div>
+{% if goal.target %}<div class="d">of {{ goal.target|inr }} · {{ s.remaining|inr }} to go</div><div style="margin-top:.75rem">{{ progress(s.pct, 'ok') }}</div>{% endif %}
+{% if s.monthly_needed %}<div class="d" style="margin-top:.5rem">About {{ s.monthly_needed|inr }} a month to hit {{ goal.deadline|d }}</div>{% endif %}
+{% if s.pending %}<div class="d">{{ s.pending|inr }} pending approval</div>{% endif %}</div>
+{% if s.by_account %}<div class="group-title">Where it sits</div><div class="card tight"><div class="list">{% for aid, amt in s.by_account.items() %}<div class="li"><span class="grow t">{{ accs[aid].display }}</span><span class="end">{{ amt|inr }}</span></div>{% endfor %}</div></div>{% endif %}
+<div class="cols"><div><h2 class="h2">Add money</h2><form method="post" action="{{ url_for('settings.goal_add_money', gid=goal.id) }}" class="card stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<label class="field"><span>Held in</span><select name="account_id" required>{% for a in eligible %}<option value="{{ a.id }}">{{ a.display }}</option>{% endfor %}</select><small class="hint">Bank or investment accounts only.</small></label>
+<div class="grid g2"><label class="field"><span>Amount ₹</span><input type="text" inputmode="decimal" name="amount" required></label><label class="field"><span>Date</span><input type="date" name="date" value="{{ today.isoformat() }}"></label></div>
+<button class="btn">Add to goal</button></form></div>
+{% if can_manage %}<div><h2 class="h2">Recurring assignment</h2><form method="post" action="{{ url_for('settings.goal_add_rule', gid=goal.id) }}" class="card stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<label class="field"><span>From account</span><select name="account_id" required>{% for a in eligible %}<option value="{{ a.id }}">{{ a.display }}</option>{% endfor %}</select></label>
+<div class="grid g2"><label class="field"><span>Amount ₹</span><input type="text" inputmode="decimal" name="amount" required></label><label class="field"><span>Repeats</span><select name="recurrence"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="yearly">Yearly</option></select></label></div>
+<label class="field"><span>Starting</span><input type="date" name="start" value="{{ today.isoformat() }}"></label>
+<button class="btn sec">Create recurring assignment</button><small class="hint">Each run waits in Approvals before it counts.</small></form></div>{% endif %}</div>
+{% if rules %}<div class="group-title">Recurring</div><div class="card tight"><div class="list">{% for r in rules %}<div class="li"><span class="grow"><span class="t" style="display:block">{{ r.amount|inr }} {{ r.recurrence }}</span><span class="s" style="display:block">{{ r.account.display }} · {{ ('next ' ~ r.next_run|d('%d %b')) if r.active else 'paused' }}</span></span>
+{% if can_manage %}<form method="post" action="{{ url_for('settings.goal_rule_toggle', rid=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm">{{ 'Pause' if r.active else 'Resume' }}</button></form>{% endif %}</div>{% endfor %}</div></div>{% endif %}
+<h2 class="h2">History</h2><div class="card tight"><div class="list">{% for e in entries %}<div class="li"><span class="ico {{ 'income' if e.amount>0 else 'expense' }}">{{ icon('plus' if e.amount>0 else 'arrows') }}</span><span class="grow"><span class="t" style="display:block">{{ accs[e.account_id].display }}{% if e.status=='pending' %} <span class="badge warn">Pending</span>{% endif %}{% if e.source=='auto' %} <span class="badge gray">Auto</span>{% endif %}</span>
+<span class="s" style="display:block">{{ e.date|d }}{% if e.note %} · {{ e.note }}{% endif %}</span></span><span class="end {{ 'pos' if e.amount>0 else 'neg' }}">{{ e.amount|inr(sign=True) if False else (('+' if e.amount>0 else '') ~ (e.amount|inr)) }}</span></div>{% else %}<div class="empty">Nothing yet.</div>{% endfor %}</div></div>
+{% if can_manage %}<form method="post" action="{{ url_for('settings.goal_archive', gid=goal.id) }}" style="margin-top:1rem" data-confirm="Archive this goal? Its history stays." data-confirm-label="Archive"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec block">{{ icon('archive','s') }} Archive goal</button></form>{% endif %}
+{% endblock %}

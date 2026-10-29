@@ -1,0 +1,33 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, txn_row, acct_options, empty %}
+{% block title %}Activity · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Activity', f.start|d('%d %b') ~ ' – ' ~ f.end|d('%d %b %Y')) %}
+<button class="btn sec sm" data-sheet="filters">{{ icon('filter','s') }} Filters{% if active_filters %} · {{ active_filters }}{% endif %}</button>
+<a class="btn sec sm" href="{{ url_for('main.activity_csv', **args) }}" download>{{ icon('down','s') }} CSV</a>{% endcall %}
+<div class="sum-cards">
+  <div class="card stat"><div class="l">Income</div><div class="v pos num">{{ summary.income|inr }}</div></div>
+  <div class="card stat"><div class="l">Expenses</div><div class="v neg num">{{ summary.expense|inr }}</div></div>
+  <div class="card stat"><div class="l">Net</div><div class="v num {{ 'neg' if summary.net<0 }}">{{ summary.net|inr }}</div></div>
+  <div class="card stat"><div class="l">Transfers</div><div class="v num">{{ summary.transfer|inr }}</div><div class="d">{{ summary.count }} posted</div></div>
+</div>
+<form method="get" class="row-flex" style="margin-bottom:.5rem"><label class="field" style="flex:1"><span class="sr">Search notes</span><input type="search" name="q" value="{{ f.q or '' }}" placeholder="Search notes">
+{% for k, v in args.items() if k not in ('q',) %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}</label></form>
+{% for day, items in days.items() %}<div class="day">{{ day|d('%a, %d %b %Y') }}</div><div class="card tight"><div class="list">{% for t in items %}{{ txn_row(t, can_edit(t)) }}{% endfor %}</div></div>{% else %}
+<div class="card">{% call empty('list', 'No transactions here', 'Try a wider date range or clear the filters.') %}<a class="btn" href="{{ url_for('main.txn_new') }}">Add one</a>{% endcall %}</div>{% endfor %}
+{% if pages > 1 %}<div class="pager">{% if page>1 %}<a class="btn sec sm" href="{{ url_for('main.activity', page=page-1, **args) }}">Newer</a>{% endif %}<span class="muted">Page {{ page }} of {{ pages }}</span>{% if page<pages %}<a class="btn sec sm" href="{{ url_for('main.activity', page=page+1, **args) }}">Older</a>{% endif %}</div>{% endif %}
+<p class="hint" style="text-align:center;margin-top:1rem">Pending items are hidden unless you tick “include pending”, and never count in totals. <a href="{{ url_for('main.activity_csv', all=1) }}">Export everything</a></p>
+
+<div id="scrim-slot"></div>
+<section class="sheet glass" id="filters" role="dialog" aria-modal="true" aria-label="Filters"><div class="grab"></div><div class="sheet-head"><h2>Filters</h2><button class="btn ghost sm" data-close>Close</button></div>
+<div class="sheet-body"><form method="get" class="stack">
+<div class="grid g2"><label class="field"><span>From</span><input type="date" name="start" value="{{ f.start.isoformat() }}"></label><label class="field"><span>To</span><input type="date" name="end" value="{{ f.end.isoformat() }}"></label></div>
+<label class="field"><span>Type</span><select name="type"><option value="">All</option>{% for t in ('income','expense','transfer') %}<option value="{{ t }}" {{ 'selected' if f.type==t }}>{{ t|capitalize }}</option>{% endfor %}</select></label>
+<label class="field"><span>Account</span><select name="account"><option value="">All accounts</option>{{ acct_options(accounts, f.account_id) }}</select></label>
+<label class="field"><span>Account type</span><select name="kind"><option value="">All</option>{% for k,l in kinds.items() %}<option value="{{ k }}" {{ 'selected' if f.kind==k }}>{{ l }}</option>{% endfor %}</select></label>
+<label class="field"><span>Category</span><select name="category"><option value="">All categories</option>{% for c in cats %}<option value="{{ c.id }}" {{ 'selected' if f.category_id==c.id }}>{{ c.name }} ({{ c.kind }})</option>{% endfor %}</select></label>
+<div class="grid g2"><label class="field"><span>Min amount</span><input type="number" step="0.01" min="0" inputmode="decimal" name="min" value="{{ args.get('min','') }}"></label><label class="field"><span>Max amount</span><input type="number" step="0.01" min="0" inputmode="decimal" name="max" value="{{ args.get('max','') }}"></label></div>
+<label class="field"><span>Note contains</span><input type="search" name="q" value="{{ f.q or '' }}"></label>
+<label class="check"><input type="checkbox" name="pending" value="1" {{ 'checked' if args.get('pending') }}> Include pending items</label>
+<div class="row-flex"><a class="btn sec" style="flex:1" href="{{ url_for('main.activity') }}">Reset</a><button class="btn" style="flex:2">Apply</button></div>
+</form></div></section>
+{% endblock %}

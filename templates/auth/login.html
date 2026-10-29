@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block title %}Sign in · Samruddhi{% endblock %}
+{% block auth %}<div class="card"><div class="logo">स</div><h1 class="title" style="font-size:2rem">Samruddhi</h1><p class="subtitle" style="margin-bottom:1.25rem">Sign in to your household.</p>
+<form method="post" class="stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<label class="field"><span>Username or email</span><input type="text" name="username" autocomplete="username" autocapitalize="none" required autofocus></label>
+<label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" required></label>
+<button class="btn block">Sign in</button></form></div>{% endblock %}

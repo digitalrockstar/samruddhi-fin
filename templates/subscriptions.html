@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, empty %}
+{% block title %}Subscriptions · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Subscriptions', 'Repeating transactions. Each run waits in Approvals.') %}<a class="btn sm" href="{{ url_for('main.txn_new') }}">{{ icon('plus','s') }} New</a>{% endcall %}
+{% if not subs %}<div class="card">{% call empty('repeat', 'No subscriptions yet', 'On any transaction, set “Repeats” to weekly, monthly or yearly.') %}{% endcall %}</div>{% endif %}
+<div class="stack">{% for t in subs %}<div class="card stack"><div class="row-flex spread"><div><b>{{ t.note or (t.category.path if t.category else 'Repeating ' ~ t.type) }}</b>
+<div class="muted" style="font-size:.875rem">{{ t.type|capitalize }} · {{ t.recurrence }} · {{ t.account.display }}{% if t.category %} · {{ t.category.name }}{% endif %}</div></div><b class="num">{{ t.amount|inr }}</b></div>
+<div class="row-flex spread wrap"><span class="badge {{ '' if t.rec_active else 'warn' }}">{{ ('Next ' ~ t.next_run|d('%d %b %Y')) if t.rec_active else 'Paused' }}</span>
+{% if can_edit(t) %}<div class="row-flex"><form method="post" action="{{ url_for('main.subscription_action', tid=t.id, action='pause' if t.rec_active else 'resume') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm">{{ 'Pause' if t.rec_active else 'Resume' }}</button></form>
+<form method="post" action="{{ url_for('main.subscription_action', tid=t.id, action='end') }}" data-confirm="End this subscription? History is kept." data-confirm-label="End"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm neg">End</button></form></div>{% endif %}</div></div>{% endfor %}</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field %}
+{% block title %}Member · Samruddhi{% endblock %}
+{% block content %}{% call head('Edit member' if u else 'Add member', back=url_for('settings.people'), back_label='People') %}{% endcall %}
+{% set minor = picked(form,'is_minor','1', u.is_minor if u else False) %}
+<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{{ field('Name', 'name', pick(form,'name', u.name if u else ''), req=True) }}
+<label class="check"><input type="checkbox" name="is_minor" value="1" id="minor" {{ 'checked' if minor }}> Minor (tag only, no login)</label>
+<div id="login" class="stack {{ 'hide' if minor }}">
+{{ field('Username', 'username', pick(form,'username', u.username if u and u.username else ''), attrs='autocapitalize=none') }}
+{{ field('Email', 'email', pick(form,'email', u.email if u and u.email else ''), 'email') }}
+{{ field('Password' if not (u and u.password_hash) else 'New password (optional)', 'password', '', 'password', hint='At least 8 characters. The member can change it themselves.', attrs='autocomplete=new-password') }}
+<label class="check"><input type="checkbox" name="is_admin" value="1" {{ 'checked' if picked(form,'is_admin','1', u.is_admin if u else False) }}> Admin (accounts, family budgets, approvals, categories, people, resets)</label></div>
+<button class="btn block">Save member</button></form>
+<script>document.getElementById('minor').addEventListener('change',e=>document.getElementById('login').classList.toggle('hide',e.target.checked))</script>{% endblock %}

@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import empty %}
+{% block title %}{{ code }} · Samruddhi{% endblock %}
+{% block content %}{% call empty('shield', msg, 'Error ' ~ code) %}<a class="btn" href="/">Back to dashboard</a>{% endcall %}{% endblock %}
+{% block auth %}{% call empty('shield', msg, 'Error ' ~ code) %}<a class="btn" href="/">Go home</a>{% endcall %}{% endblock %}

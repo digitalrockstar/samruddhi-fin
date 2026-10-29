@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, progress, empty %}
+{% block title %}Budgets · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Budgets', 'Family budgets track Family expenses; personal budgets track each person’s share') %}<a class="btn sm" href="{{ url_for('settings.budget_form') }}">{{ icon('plus','s') }} Add</a>{% endcall %}
+{% macro rows(items) %}<div class="card tight"><div class="list">{% for r in items %}<a class="li" href="{{ url_for('settings.budget_form', bid=r.b.id) }}" style="display:block">
+<div class="row-flex spread"><b>{{ r.b.category.path }} <span class="badge gray">{{ r.b.period }}</span></b><span class="num {{ 'neg' if r.s.state=='over' }}">{{ r.s.spent|inr }} <span class="muted">/ {{ r.b.amount|inr }}</span></span></div>
+<div style="margin:.5rem 0 .25rem">{{ progress(r.s.pct, r.s.state) }}</div>
+<div class="s muted" style="font-size:.8125rem">{{ (r.s.remaining|inr ~ ' left') if r.s.remaining>=0 else ((-r.s.remaining)|inr ~ ' over') }} · {{ r.s.start|d('%d %b') }} – {{ r.s.end|d('%d %b') }}</div></a>{% endfor %}</div></div>{% endmacro %}
+{% if not family and not people %}<div class="card">{% call empty('pie','No budgets yet','Set a limit per category, weekly, monthly or annually.') %}{% endcall %}</div>{% endif %}
+{% if family %}<div class="group-title">Family</div>{{ rows(family) }}{% endif %}
+{% for u, items in people.items() %}<div class="group-title">{{ u.name }}</div>{{ rows(items) }}{% endfor %}
+{% endblock %}

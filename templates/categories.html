@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head %}
+{% block title %}Categories · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Categories', 'Main category › sub-category. Only the admin can change them.') %}{% if can('categories.manage') %}<a class="btn sm" href="{{ url_for('settings.category_form') }}">{{ icon('plus','s') }} Add</a>{% endif %}{% endcall %}
+{% for kind, label, rows in sections %}<div class="group-title">{{ label }}</div><div class="card tight"><div class="list">
+{% for c in rows if (show or not c.archived) %}<div class="li" style="align-items:flex-start"><span class="grow"><span class="t" style="display:block">{{ c.name }}{% if c.archived %} <span class="badge gray">archived</span>{% endif %}{% if c.start_date or c.end_date %} <span class="badge warn">{{ c.start_date|d('%d %b %y') if c.start_date else '…' }} – {{ c.end_date|d('%d %b %y') if c.end_date else '…' }}</span>{% endif %}</span>
+<span class="s" style="display:block;white-space:normal">{% for k in c.children|sort(attribute='name') if (show or not k.archived) %}{{ k.name }}{{ ' (temp)' if k.start_date or k.end_date }}{{ ' · ' if not loop.last }}{% endfor %}</span></span>
+{% if can('categories.manage') %}<span class="row-flex"><a class="btn sec sm" href="{{ url_for('settings.category_form', cid=c.id) }}">Edit</a><a class="btn sec sm" href="{{ url_for('settings.category_form', parent=c.id) }}">+ Sub</a>
+<form method="post" action="{{ url_for('settings.category_archive', cid=c.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm">{{ 'Restore' if c.archived else 'Archive' }}</button></form></span>{% endif %}</div>{% endfor %}</div></div>{% endfor %}
+<p style="text-align:center;margin-top:1rem"><a href="{{ url_for('settings.categories', archived=(None if show else 1)) }}">{{ 'Hide archived' if show else 'Show archived' }}</a></p>
+{% endblock %}

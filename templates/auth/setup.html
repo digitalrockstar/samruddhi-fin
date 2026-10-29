@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block title %}Set up · Samruddhi{% endblock %}
+{% block auth %}<div class="card"><div class="logo">स</div><h1 class="title" style="font-size:2rem">Welcome</h1><p class="subtitle" style="margin-bottom:1.25rem">Create the first account. You become the household admin and can add family later.</p>
+<form method="post" class="stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<label class="field"><span>Household name</span><input type="text" name="household" placeholder="HOUSEHOLD # 1" value="{{ pick(request.form,'household') }}"></label>
+<label class="field"><span>Your name</span><input type="text" name="name" required value="{{ pick(request.form,'name') }}"></label>
+<label class="field"><span>Username</span><input type="text" name="username" autocapitalize="none" required value="{{ pick(request.form,'username') }}"></label>
+<label class="field"><span>Email</span><input type="email" name="email" required value="{{ pick(request.form,'email') }}"></label>
+<label class="field"><span>Password</span><input type="password" name="password" autocomplete="new-password" minlength="8" required><small class="hint">At least 8 characters.</small></label>
+<label class="field"><span>Confirm password</span><input type="password" name="password2" autocomplete="new-password" required></label>
+<button class="btn block">Create household</button></form></div>{% endblock %}

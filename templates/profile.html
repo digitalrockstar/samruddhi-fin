@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field %}
+{% block title %}Settings · Samruddhi{% endblock %}
+{% block content %}{% call head('Settings') %}{% endcall %}
+<h2 class="h2" style="margin-top:0">Appearance</h2>
+<form method="post" action="{{ url_for('settings.set_theme') }}" class="card stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<div class="theme-grid">{% for key, name, mode, bg, ac in themes %}<label class="theme-opt"><input type="radio" name="theme" value="{{ key }}" {{ 'checked' if key==theme }}><div class="sw" style="background:{{ bg }}"><i style="background:{{ ac }}"></i><i style="background:{{ ac }};opacity:.35"></i></div><div class="nm"><span>{{ name }}</span><span class="faint">{{ mode }}</span></div></label>{% endfor %}</div>
+<button class="btn">Save theme</button></form>
+<h2 class="h2">Your account</h2>
+<form method="post" class="card stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{{ field('Name', 'name', pick(request.form,'name', g.user.name), req=True) }}
+{{ field('Username', 'username', pick(request.form,'username', g.user.username), req=True, attrs='autocapitalize=none') }}
+{{ field('Email', 'email', pick(request.form,'email', g.user.email), 'email', req=True) }}
+{{ field('New password', 'new_password', '', 'password', hint='Leave empty to keep the current one.', attrs='autocomplete=new-password') }}
+{{ field('Current password', 'current_password', '', 'password', hint='Needed to change username, email or password.', attrs='autocomplete=current-password') }}
+{% if can('people.manage') %}{{ field('Household name', 'household', pick(request.form,'household', g.household.name)) }}{% endif %}
+<button class="btn">Save</button></form>
+{% endblock %}

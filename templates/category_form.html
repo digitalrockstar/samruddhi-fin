@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field %}
+{% block title %}Category · Samruddhi{% endblock %}
+{% block content %}{% call head('Edit category' if c else 'New category', back=url_for('settings.categories'), back_label='Categories') %}{% endcall %}
+<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{{ field('Name', 'name', pick(form,'name', c.name if c else ''), req=True) }}
+{% if not c %}<label class="field"><span>Under (leave empty for a main category)</span><select name="parent_id" id="parent"><option value="">Main category</option>{% for p in parents %}<option value="{{ p.id }}" {{ 'selected' if pick(form,'parent_id', preset or '')|string==p.id|string }}>{{ p.name }} ({{ p.kind }})</option>{% endfor %}</select></label>
+<label class="field"><span>Kind (main categories only)</span><select name="kind">{% for k in ('expense','income','transfer') %}<option value="{{ k }}" {{ 'selected' if pick(form,'kind','expense')==k }}>{{ k|capitalize }}</option>{% endfor %}</select></label>{% endif %}
+<div class="card flat stack"><b>Temporary project (optional)</b><small class="hint">The category can only be used on dates inside this window, e.g. a trip or renovation.</small>
+<div class="grid g2">{{ field('From', 'start_date', pick(form,'start_date', c.start_date.isoformat() if c and c.start_date else ''), 'date') }}{{ field('Until', 'end_date', pick(form,'end_date', c.end_date.isoformat() if c and c.end_date else ''), 'date') }}</div></div>
+<button class="btn block">Save</button></form>{% endblock %}

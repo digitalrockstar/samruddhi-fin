@@ -1,0 +1,42 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, progress %}
+{% block title %}Dashboard · Samruddhi{% endblock %}
+{% block content %}
+{% call head(g.household.name, 'Household finance health') %}<a class="btn sm" href="{{ url_for('main.txn_new') }}">{{ icon('plus','s') }} Add</a>{% endcall %}
+<div id="dash">
+<div class="chips" role="group" aria-label="Period">{% for k, l in periods %}<button type="button" class="chip {{ 'on' if k=='this_month' }}" data-period="{{ k }}">{{ l }}</button>{% endfor %}</div>
+<div id="custom" class="grid g2 hide" style="margin-bottom:.75rem"><label class="field"><span>From</span><input type="date" id="f-start"></label><label class="field"><span>To</span><input type="date" id="f-end"></label></div>
+<div class="grid g2" style="margin-bottom:.75rem">
+  <label class="field"><span>Who</span><select id="f-person"><option value="all">Everyone</option><option value="family">Family (shared)</option>{% for u in people %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Account type</span><select id="f-kind"><option value="all">All types</option>{% for k, l in kinds.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></label>
+</div>
+<div id="dash-err" class="flash error hide">Couldn't load the dashboard. <button class="btn sm sec" id="dash-retry" type="button">Retry</button></div>
+<a id="pending-note" class="flash warn hide" href="{{ url_for('main.approvals') }}">{{ icon('bell','s') }}<span><b>0 items</b> waiting for approval. They are not counted until approved.</span></a>
+
+<div class="card hero stat"><div class="l">Net cash flow · <span id="d-range" class="faint"></span></div><div class="v num" id="v-net">₹0.00</div>
+  <div class="grid g2" style="margin-top:1rem"><div><div class="l">Income</div><div class="v pos num" id="v-income" style="font-size:1.25rem">₹0.00</div></div><div><div class="l">Expenses</div><div class="v neg num" id="v-expense" style="font-size:1.25rem">₹0.00</div></div></div></div>
+<div class="grid g4" style="margin-top:.75rem">
+  <div class="card stat"><div class="l">Total balance</div><div class="v num" id="v-balance">₹0.00</div><div class="d">Bank, wallet &amp; cash</div></div>
+  <div class="card stat"><div class="l">Net worth</div><div class="v num" id="v-worth">₹0.00</div><div class="d">After cards &amp; loans</div></div>
+  <div class="card stat"><div class="l">Credit cards</div><div class="v num" id="v-cards">0</div><div class="d" id="d-cards"></div></div>
+  <div class="card stat"><div class="l">Credit utilisation</div><div class="v num" id="v-util">—</div><div class="progress" style="margin-top:.5rem"><i id="b-util" data-w="0"></i></div><div class="d" id="d-util"></div></div>
+</div>
+
+<h2 class="h2">Last 6 months <span class="row-flex faint" style="font-size:.8125rem;font-weight:600"><span class="pos">● Income</span><span class="neg">● Spent</span></span></h2>
+<div class="card"><div id="c-trend" class="chart-box"></div></div>
+<div class="cols">
+<div><h2 class="h2">Spending by category</h2><div class="card"><div id="c-cat" class="chart-box"></div></div></div>
+<div><h2 class="h2">Who spent</h2><div class="card"><div id="c-person"></div></div>
+<h2 class="h2">By account type</h2><div class="card"><div id="c-kind"></div></div></div>
+</div>
+<h2 class="h2">Payment methods</h2><div class="card"><div id="c-method"></div></div>
+<h2 class="h2">Balances by account</h2><div id="c-bal"></div>
+</div>
+
+{% if brows or grows %}<div class="cols">
+{% if brows %}<div><h2 class="h2">Budgets <a href="{{ url_for('settings.budgets') }}" style="font-size:.9375rem">See all</a></h2><div class="card tight"><div class="list">
+{% for r in brows %}<a class="li" href="{{ url_for('settings.budgets') }}" style="display:block"><div class="row-flex spread"><b>{{ r.b.category.name }}</b><span class="num muted">{{ r.s.spent|inr }} / {{ r.b.amount|inr }}</span></div><div style="margin-top:.5rem">{{ progress(r.s.pct, r.s.state) }}</div></a>{% endfor %}</div></div></div>{% endif %}
+{% if grows %}<div><h2 class="h2">Goals <a href="{{ url_for('settings.goals') }}" style="font-size:.9375rem">See all</a></h2><div class="card tight"><div class="list">
+{% for r in grows %}<a class="li" href="{{ url_for('settings.goal_detail', gid=r.g.id) }}" style="display:block"><div class="row-flex spread"><b>{{ r.g.name }}</b><span class="num muted">{{ r.s.saved|inr }}{% if r.g.target %} / {{ r.g.target|inr }}{% endif %}</span></div>{% if r.s.pct is not none %}<div style="margin-top:.5rem">{{ progress(r.s.pct, 'ok') }}</div>{% endif %}</a>{% endfor %}</div></div></div>{% endif %}
+</div>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/dash.js') }}" defer></script>{% endblock %}

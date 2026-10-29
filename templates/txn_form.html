@@ -1,0 +1,38 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, acct_options %}
+{% block title %}{{ 'Edit' if t else 'New' }} transaction · Samruddhi{% endblock %}
+{% block content %}
+{% set shares = {} %}{% if t %}{% for b in t.beneficiaries %}{% set _ = shares.update({b.user_id: b.share}) %}{% endfor %}{% endif %}
+{% set scope = pick(form,'scope', t.scope if t else 'family') %}
+{% set split = pick(form,'split', 'custom' if (shares.values()|select('ne',None)|list) else 'equal') %}
+{% call head(('Edit ' ~ t.type) if t else 'New transaction', back=url_for('main.activity'), back_label='Activity') %}{% endcall %}
+{% if t and t.status=='pending' %}<div class="flash warn">This item is pending approval and does not count yet.</div>{% endif %}
+<form method="post" id="txn" class="stack" data-type="{{ ttype }}" style="max-width:36rem">
+<input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.args.get('next','') }}">
+{% if not t %}<div class="seg" role="radiogroup" aria-label="Type">{% for k, l in (('expense','Expense'),('income','Income'),('transfer','Transfer')) %}<label><input type="radio" name="type" value="{{ k }}" {{ 'checked' if ttype==k }}>{{ l }}</label>{% endfor %}</div>{% endif %}
+<label class="field"><span class="sr">Amount</span><input class="amount-in" type="text" inputmode="decimal" name="amount" id="amount" placeholder="₹0.00" autocomplete="off" required value="{{ pick(form,'amount', (t.amount|amt) if t else '') }}"></label>
+<div class="grid g2"><label class="field"><span>Date</span><input type="date" name="date" id="date" required value="{{ pick(form,'date', t.date.isoformat() if t else today.isoformat()) }}"></label>
+<label class="field"><span id="acct-label">Paid from</span><select name="account_id" id="account" required><option value="" disabled {{ 'selected' if not (t or form) }}>Choose…</option>{{ acct_options(accounts, pick(form,'account_id', t.account_id if t else '')) }}</select><small class="hint" id="hint-from"></small></label></div>
+<label class="field" data-types="transfer"><span>To</span><select name="to_account_id" id="to_account"><option value="">Choose…</option>{{ acct_options(accounts, pick(form,'to_account_id', t.to_account_id if t and t.to_account_id else '')) }}</select><small class="hint" id="hint-to"></small></label>
+<div class="grid g2"><label class="field"><span>Category</span><select id="cat1"></select></label><label class="field"><span>Sub-category</span><select name="category_id" id="cat2" data-selected="{{ pick(form,'category_id', t.category_id if t and t.category_id else '') }}"></select></label></div>
+<label class="field"><span>Note</span><input type="text" name="note" maxlength="500" placeholder="e.g. app or merchant, what it was for" value="{{ pick(form,'note', t.note if t else '') }}"></label>
+
+<div data-types="expense" class="stack"><span class="label">For</span>
+<div class="seg"><label><input type="radio" name="scope" value="family" {{ 'checked' if scope=='family' }}>Family</label><label><input type="radio" name="scope" value="individuals" {{ 'checked' if scope=='individuals' }}>Individual(s)</label></div>
+<small class="hint">Family counts against family budgets; Individual counts against each person’s own budget.</small>
+<div id="people" class="stack hide">
+ <div class="seg"><label><input type="radio" name="split" value="equal" {{ 'checked' if split!='custom' }}>Split equally</label><label><input type="radio" name="split" value="custom" {{ 'checked' if split=='custom' }}>Choose amounts</label></div>
+ {% for u in people %}<div class="row-flex"><label class="check" style="flex:1"><input type="checkbox" name="beneficiaries" value="{{ u.id }}" {{ 'checked' if picked(form,'beneficiaries', u.id|string, (t and u.id in t.beneficiary_ids)) }}> {{ u.name }}{% if u.is_minor %} <span class="badge gray">minor</span>{% endif %}</label>
+ <input type="text" inputmode="decimal" name="share_{{ u.id }}" placeholder="₹ share" style="width:7.5rem" value="{{ pick(form,'share_' ~ u.id, (shares.get(u.id)|amt) if shares.get(u.id) is not none else '') }}"></div>{% endfor %}
+ <small class="hint">“Choose amounts” must add up to the expense total. Leave on equal to split evenly.</small></div></div>
+
+<label class="field" data-types="income,transfer"><span>Earmark for a goal <small class="faint">(optional, no effect on balances)</small></span><select name="goal_id"><option value="">No goal</option>{% for gl in goals %}<option value="{{ gl.id }}" {{ 'selected' if pick(form,'goal_id', entry.goal_id|string if entry else '')|string==gl.id|string }}>{{ gl.name }}</option>{% endfor %}</select><small class="hint">Goals can only sit in bank or investment accounts.</small></label>
+<label class="field"><span>Repeats</span><select name="recurrence">{% for k, l in recurrences.items() %}<option value="{{ k }}" {{ 'selected' if pick(form,'recurrence', t.recurrence if t else 'none')==k }}>{{ l }}</option>{% endfor %}</select><small class="hint">Repeats create pending items that you approve in Approvals.</small></label>
+{% if not t %}<details data-types="expense" class="card flat"><summary style="cursor:pointer;font-weight:600">{{ icon('gift','s') }} One-off cashback on this purchase</summary><div class="stack" style="margin-top:.75rem">
+<div class="grid g2"><label class="field"><span>Type</span><select name="cb_mode"><option value="percent">Percent</option><option value="fixed" {{ 'selected' if pick(form,'cb_mode')=='fixed' }}>Fixed ₹</option></select></label><label class="field"><span>Value</span><input type="text" inputmode="decimal" name="cb_value" placeholder="8 or 50" value="{{ pick(form,'cb_value') }}"></label></div>
+<div class="grid g2"><label class="field"><span>Arrives after (days)</span><input type="number" min="0" name="cb_days" value="{{ pick(form,'cb_days','0') }}"></label><label class="field"><span>Into account</span><select name="cb_account_id" id="cb_account"><option value="">Same account</option>{{ acct_options(accounts, pick(form,'cb_account_id','')) }}</select><small class="hint" id="hint-cb"></small></label></div></div></details>{% endif %}
+<button class="btn block">{{ 'Save changes' if t else 'Add transaction' }}</button>
+</form>
+{% if t %}<form method="post" action="{{ url_for('main.txn_delete', tid=t.id) }}" style="max-width:36rem;margin-top:.75rem" data-confirm="Delete this transaction? Balances will update." data-confirm-label="Delete"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec block neg">{{ icon('trash','s') }} Delete transaction</button></form>{% endif %}
+<script type="application/json" id="cats-json">{{ cats|tojson }}</script><script type="application/json" id="hints-json">{{ hints|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/txn.js') }}" defer></script>{% endblock %}
