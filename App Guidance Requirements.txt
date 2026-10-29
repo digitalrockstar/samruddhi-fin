@@ -1,0 +1,105 @@
+Go through the repo and suggest ways to improve both the UI and the app’s overall features.
+
+Context: 
+Samruddhi is our home mnemonic. This repo is for personal finance tracking - incomes, expenses and credit card management. We are keeping it manual for now. Current version is V1 is all things displayed in isolation. The ideal functionality expected out of app is as below (identify if there are gaps or questions in these requirements). I
+
+Tech:
+Keep in mind - to be hosted on Render and db powered by Neon, Postgres.
+Stack can be suggested by you as needed.
+
+1. Dashboard.
+Gives overall finance health of the household. Income, Expenses, Net Cash Flow, Total Account Balance, Number of Credit Cards, Credit Utilization, Expenses by categories and account type, payment methods, balances by account, expenses by each individual or family as a group etc. This should be dynamic and should have asthetic looking filters and display elements.
+
+
+2. Finance Settings
+2a. Accounts
+Accounts are basic entities whic store money.
+It can be Bank (Savings, Current, Minor, etc.), Credit Card, Investment account, Wallet, Loans etc.
+Each account is associated by entity or company such as Amazon Wallet, ICICI Meal Debit/Prepaid Card, Axis Credit Card x2, Metro Card, etc.
+For Debit card or UPI there should be linkage with actual bank account, for cc, nothing as such. They should be grouped in display by company.
+Each account will have an owner or shared tag - along with if it's owner - who is it.
+Information/configuration for each account type is different.
+Bank will have amount, bank name, account last 4 digits and so on.
+Cards will have credit limit, due date, bank name, card last 4 digits, add-on/shared limit flag (add on cards share limit with parent card)
+Investment account will have company name, account last 4 digits, total invested value, current value (can later geet into investment details in v2) and so on.
+Loan account will have a static value to track the payments completed.
+Each account can be tagged with a purpose tag - preferred for fuel, cab, savings, investment etc. if type is not used.
+Accounts can be edited or archived, never deleted.
+
+2b. Cashbacks
+Cashbacks are auto generated or money earned in promotion against a purchase.
+These can have a constant rule and cab be defined by a account with cashback kickout to different account, or same account OR can be adhoc, at transaction level. Each needs to be handled accordingly.
+Eg. ICICI Amazon CC gives 5% cashback on amazon purchases after 30 days in Amazon Wallet account. This should create a 5% value future transaction to be approved in approvals tab. OR A purchase on firstcry in sale promotion enables 8% cashback in 7 days in FC wallet Account, one time only. Some other can be instant - Buying worth 800 on zepto will add 50 cashback in zepto wallet on same day. 
+
+2c. Budgets
+Budgets are entities to track the expenses incurred by the family.
+Budgets can be individual, family/shared.
+Budgets can be set at category level - shared or inidividual. E.g. Shopping budget can be different for two individuals as well as have a common shared family budget. To detemine how is an expense tracked under budget, you check beneficiaries of the purchase/expense - if it's individual or family and track accordingly.
+Budgets can be make in three timelines - weekly, monthly or annually.
+
+2d. Goals
+Goals are savings counterpart to expense's budget tracking.
+Any income, transfer or adhoc amount can be assigned to goal.
+This can be a recurring assignment or adhoc. Recurring assignment from a particular account is subject to approval, and is not added to goal amount until it's approved by admin.
+This is have net zero impact on accounts. Only the said amount is earmarked for a particular goal (Car, Bike, Gold, etc.)
+Similar to budget, goals can be individual or shared.
+They can have a deadline or not.
+Goals can have an amount sit in different accounts. But always bank or investment- never a credit card.
+
+
+3. Transactions
+3a. Definition and rules
+Transactions is an exchange of money between accounts or persons.
+Transactions can be of 3 types - Income, Expense or Transfer. Income adds the amount to the account, Expense reduces the amount from the account, Transfer does both to the appropriate accounts.
+Each transaction carries following values - date, amount, account, category, note, beneficiary(ies), goals, subscription flag.
+date - defaults to today. Can select a past or future date.
+amount - always positive. has a check against the account balances and credit limits.
+account - can be credit card or bank accounts. list needs to be unified, with sub headers.
+category - depending on the selection of income, expense or transfer button at top - it should show the listed categories. subcategories will be shown based on selected category.
+note - free text for comments, app name for cc payment, or any extra description to be added for context.
+benefeciary - can be individual(s), can be family/shared. Impacts the budgets accordingly, expenses for members (split by 2 people, 3 people).
+goals - select a goal from one's created if it's income or transfer. Said amount should be added to the goal with account details as tracking for goals's total amount bifurcation.
+subscription flag - the flag states if the transaction repeat itself. If yes, weekly, monthly or annually.
+
+3b. Activity Page
+A seperate activity page should list all the transactions defaulting last 30 days with filters across the board - accounts, account type, dates, categories, transaction type, amounts range and search bar to search in notes- with a summary at the top as cards for said filters.
+It should also have Export CSV option to get the list of all the transactions' raw data. 
+
+3c. Subscriptions
+Transactions marked as subscriptions auto create on the said reccurance date.
+These can be weekly, day of the month (monthly) or yearly.
+Auto-created transactions, like cashback, are subject to approval and should show up under Approvals tab. 
+
+3d. Approvals
+Transactions auto-created - be it goal contribution, cashback or subscription - needs to be approved by admin user for moving them to transaction.
+Until a transaction is approved, it should be marked in pending state and not be added in the summary or any calculations.
+
+3e. Reminders
+Reminders are generated for CC Payments, Loan Payments, etc. based on the due date mentioned in the accounts for CC Bills or EMIs. Once approved, it should generate a transfer from respective account chosen to CC or Loan account. Loan amounts will have a principal value and interest value assigned to it to track against actual loan value.
+
+4. App Settings
+4a. People
+People are family members who can add,edit and view the app. They have their own username, email id and password.
+One user is assigned as the admin and only admin can archive, add accounts or family or individual budgets. admin can reset the full data. on first run of the app - the database is created and first user signing up for the household will be assigned as the admin. he can give admin role to other members of the family.
+Individuals can add their own goals and budgets but not family values.
+
+4b. Categories
+category is tag associated with each transaction which helps people track thier incomes or expenses better.
+categories are assigned along with each transaction and can only be created by admin.
+categories will have a L2. Examples - Cab > Uber, Grocery > Zepto, Income > Salary, Income > Cricket, Transfer > CC Payment, Transfer > Investment and so on.
+categories can also be created on a time bound range for temporary projects.
+
+4c. Account Settings
+each member can change their password, username and email.
+they can be tagged as adult or minor.
+admin has option to name the household, other wise defaulting to HOUSEHOLD # 1 on first login/run of the app.
+
+4d. Data Reset
+admin will have an option to reset the data.
+This will have 3 options.
+4dA. A Full financial reset. Deleting the household altogether with all masters and information. prompt if backup required in csv for individual tables.
+4dB. A data reset for all time. Reset the transactional data. Delete all the transactions and amounts - but keep the masters - goals, accounts, budgets, people, categories, etc.
+4dC. A data reset after certain date time. same as 4dB, but do it only for transactions past a date time. 
+
+
+Everythingg in the app should be zero sum. If a value appears in the transactions, it should be considered. One specific value should be present in each accounts stating "starting balance" to adjust for current snapshot at time of launching the app.
