@@ -1,7 +1,5 @@
-Go through the repo and suggest ways to improve both the UI and the app’s overall features.
-
 Context: 
-Samruddhi is our home mnemonic. This repo is for personal finance tracking - incomes, expenses and credit card management. We are keeping it manual for now. Current version is V1 is all things displayed in isolation. The ideal functionality expected out of app is as below (identify if there are gaps or questions in these requirements). I
+Samruddhi is our home mnemonic. This repo is for personal household finance tracking - incomes, expenses and credit card management. We are keeping it manual for now. Current version is V1 is all things displayed in isolation. The ideal functionality expected out of app is as below (identify if there are gaps or questions in these requirements). I
 
 Tech:
 Keep in mind - to be hosted on Render and db powered by Neon, Postgres.
@@ -94,12 +92,15 @@ each member can change their password, username and email.
 they can be tagged as adult or minor.
 admin has option to name the household, other wise defaulting to HOUSEHOLD # 1 on first login/run of the app.
 
-4d. Data Reset
+4d. Themes
+Give atleast 4-5 dark and light theme options. Keep these consistent across the app.
+
+4e. Data Reset
 admin will have an option to reset the data.
 This will have 3 options.
-4dA. A Full financial reset. Deleting the household altogether with all masters and information. prompt if backup required in csv for individual tables.
-4dB. A data reset for all time. Reset the transactional data. Delete all the transactions and amounts - but keep the masters - goals, accounts, budgets, people, categories, etc.
-4dC. A data reset after certain date time. same as 4dB, but do it only for transactions past a date time. 
+4eA. A Full financial reset. Deleting the household altogether with all masters and information. prompt if backup required in csv for individual tables.
+4eB. A data reset for all time. Reset the transactional data. Delete all the transactions and amounts - but keep the masters - goals, accounts, budgets, people, categories, etc.
+4eC. A data reset after certain date time. same as 4eB, but do it only for transactions past a date time. 
 
 
 Everythingg in the app should be zero sum. If a value appears in the transactions, it should be considered. One specific value should be present in each accounts stating "starting balance" to adjust for current snapshot at time of launching the app.
