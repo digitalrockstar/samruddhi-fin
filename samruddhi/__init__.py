@@ -7,15 +7,8 @@ from . import auth, ledger, permissions
 from .config import Config
 from .models import Household, db
 
-THEMES = [
-    ("daylight", "Daylight", "light", "#F5F5F7", "#007AFF"),
-    ("linen", "Linen", "light", "#F6F1E7", "#B5651D"),
-    ("midnight", "Midnight", "dark", "#0B0B10", "#0A84FF"),
-    ("graphite", "Graphite", "dark", "#1C1C1E", "#30D158"),
-    ("forest", "Forest", "dark", "#0E1A14", "#5BD6A0"),
-    ("dusk", "Dusk", "dark", "#17111F", "#BF5AF2"),
-]
-THEME_KEYS = [t[0] for t in THEMES]
+from .themes_data import THEME_GROUPS, THEME_KEYS, THEMES  # noqa: E402
+
 _ran_today = {}
 
 
@@ -59,7 +52,7 @@ def create_app(config=None):
         if g.user:
             from .routes_main import pending_count
             pending = pending_count(g.household.id)
-        return dict(csrf_token=auth.csrf_token, themes=THEMES, theme=theme if theme in THEME_KEYS else "daylight",
+        return dict(csrf_token=auth.csrf_token, themes=THEMES, theme_groups=THEME_GROUPS, theme=theme if theme in THEME_KEYS else "daylight",
                     pending_count=pending, today=date.today(), can=lambda p: permissions.can(g.user, p))
 
     app.jinja_env.globals["pick"] = lambda form, key, default="": form.get(key, default) if form is not None else default
@@ -83,10 +76,17 @@ def create_app(config=None):
 
     @app.route("/manifest.webmanifest")
     def manifest():
-        return jsonify(name="Samruddhi", short_name="Samruddhi", start_url="/", display="standalone",
-                       background_color="#F5F5F7", theme_color="#F5F5F7",
-                       icons=[{"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
-                              {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"}])
+        icons = [{"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                 {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                 {"src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]
+        return jsonify(name="Samruddhi", short_name="Samruddhi", start_url="/", scope="/", display="standalone",
+                       background_color="#007AFF", theme_color="#007AFF", icons=icons)
+
+    @app.route("/favicon.ico")
+    def favicon():
+        resp = app.send_static_file("icons/favicon-48.png")      # PNG served at the legacy path
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
 
     @app.errorhandler(ledger.LedgerError)
     def ledger_error(e):

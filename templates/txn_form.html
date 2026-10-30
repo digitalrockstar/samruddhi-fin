@@ -6,15 +6,15 @@
 {% set split = pick(form,'split', 'custom' if (shares.values()|select('ne',None)|list) else 'equal') %}
 {% call head(('Edit ' ~ t.type) if t else 'New transaction', back=url_for('main.activity'), back_label='Activity') %}{% endcall %}
 {% if t and t.status=='pending' %}<div class="flash warn">This item is pending approval and does not count yet.</div>{% endif %}
-<form method="post" id="txn" class="stack" data-type="{{ ttype }}" style="max-width:36rem">
+<form method="post" id="txn" class="stack fgrid" data-type="{{ ttype }}" style="max-width:36rem">
 <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.args.get('next','') }}">
 {% if not t %}<div class="seg" role="radiogroup" aria-label="Type">{% for k, l in (('expense','Expense'),('income','Income'),('transfer','Transfer')) %}<label><input type="radio" name="type" value="{{ k }}" {{ 'checked' if ttype==k }}>{{ l }}</label>{% endfor %}</div>{% endif %}
-<label class="field"><span class="sr">Amount</span><input class="amount-in" type="text" inputmode="decimal" name="amount" id="amount" placeholder="₹0.00" autocomplete="off" required value="{{ pick(form,'amount', (t.amount|amt) if t else '') }}"></label>
+<label class="field full"><span class="sr">Amount</span><input class="amount-in" type="text" inputmode="decimal" name="amount" id="amount" placeholder="₹0.00" autocomplete="off" required value="{{ pick(form,'amount', (t.amount|amt) if t else '') }}"></label>
 <div class="grid g2"><label class="field"><span>Date</span><input type="date" name="date" id="date" required value="{{ pick(form,'date', t.date.isoformat() if t else today.isoformat()) }}"></label>
 <label class="field"><span id="acct-label">Paid from</span><select name="account_id" id="account" required><option value="" disabled {{ 'selected' if not (t or form) }}>Choose…</option>{{ acct_options(accounts, pick(form,'account_id', t.account_id if t else '')) }}</select><small class="hint" id="hint-from"></small></label></div>
 <label class="field" data-types="transfer"><span>To</span><select name="to_account_id" id="to_account"><option value="">Choose…</option>{{ acct_options(accounts, pick(form,'to_account_id', t.to_account_id if t and t.to_account_id else '')) }}</select><small class="hint" id="hint-to"></small></label>
 <div class="grid g2"><label class="field"><span>Category</span><select id="cat1"></select></label><label class="field"><span>Sub-category</span><select name="category_id" id="cat2" data-selected="{{ pick(form,'category_id', t.category_id if t and t.category_id else '') }}"></select></label></div>
-<label class="field"><span>Note</span><input type="text" name="note" maxlength="500" placeholder="e.g. app or merchant, what it was for" value="{{ pick(form,'note', t.note if t else '') }}"></label>
+<label class="field full"><span>Note</span><input type="text" name="note" maxlength="500" placeholder="e.g. app or merchant, what it was for" value="{{ pick(form,'note', t.note if t else '') }}"></label>
 
 <div data-types="expense" class="stack"><span class="label">For</span>
 <div class="seg"><label><input type="radio" name="scope" value="family" {{ 'checked' if scope=='family' }}>Family</label><label><input type="radio" name="scope" value="individuals" {{ 'checked' if scope=='individuals' }}>Individual(s)</label></div>

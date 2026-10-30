@@ -3,7 +3,7 @@
 {% block content %}
 {% call head('Goals', 'Money set aside. Balances never change - it is only earmarked.') %}<a class="btn sm" href="{{ url_for('settings.goal_form') }}">{{ icon('plus','s') }} Add</a>{% endcall %}
 {% if not rows %}<div class="card">{% call empty('target','No goals yet','Car, bike, gold, a holiday - give your savings a purpose.') %}{% endcall %}</div>{% endif %}
-<div class="grid g2">{% for r in rows %}<a class="card stack" href="{{ url_for('settings.goal_detail', gid=r.g.id) }}" style="color:inherit">
+<div class="grid g-auto">{% for r in rows %}<a class="card stack" href="{{ url_for('settings.goal_detail', gid=r.g.id) }}" style="color:inherit">
 <div class="row-flex spread"><b style="font-size:1.0625rem">{{ r.g.name }}</b><span class="badge gray">{{ r.g.owner.name if r.g.owner else 'Shared' }}</span></div>
 <div class="stat"><div class="v num">{{ r.s.saved|inr }}</div><div class="d">{% if r.g.target %}of {{ r.g.target|inr }}{% else %}no target{% endif %}{% if r.s.pending %} · {{ r.s.pending|inr }} pending{% endif %}</div></div>
 {% if r.s.pct is not none %}{{ progress(r.s.pct, 'ok') }}{% endif %}

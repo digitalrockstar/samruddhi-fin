@@ -19,4 +19,4 @@ Flask + SQLAlchemy, Postgres (Neon) in production, SQLite locally. Responsive we
 - Data reset: full, all transactions, or from a date, each behind password + typed confirmation, with CSV backup.
 
 ## Layout
-`samruddhi/ledger.py` all business rules · `routes_*.py` thin web layer · `templates/` + `static/` UI (themes in `static/css/app.css`) · `android/` WebView shell · `_legacy/` previous versions, untouched.
+`samruddhi/ledger.py` all business rules · `routes_*.py` thin web layer · `templates/` + `static/` UI (themes in `static/css/app.css`) · `android/` WebView shell (PNG launcher icons, regenerate with `scripts/gen_icons.py`) · `scripts/gen_themes.py` builds the 42 themes · `_legacy/` previous versions, untouched.
