@@ -3,7 +3,9 @@
 {% block content %}{% call head('Settings') %}{% endcall %}
 <h2 class="h2" style="margin-top:0">Appearance</h2>
 <form method="post" action="{{ url_for('settings.set_theme') }}" class="card stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
-<div class="theme-grid">{% for key, name, mode, bg, ac in themes %}<label class="theme-opt"><input type="radio" name="theme" value="{{ key }}" {{ 'checked' if key==theme }}><div class="sw" style="background:{{ bg }}"><i style="background:{{ ac }}"></i><i style="background:{{ ac }};opacity:.35"></i></div><div class="nm"><span>{{ name }}</span><span class="faint">{{ mode }}</span></div></label>{% endfor %}</div>
+<div class="seg mode-filter" role="radiogroup" aria-label="Show themes"><label><input type="radio" name="mode" value="all" checked>All {{ themes|length }}</label><label><input type="radio" name="mode" value="light">Light</label><label><input type="radio" name="mode" value="dark">Dark</label></div>
+{% for grp in theme_groups %}<div data-grp><div class="group-title" style="margin:.5rem 0">{{ {'Classic':'Classic','Duo':'Two-colour pairs','Palettes':'Palettes'}[grp] }}</div>
+<div class="theme-grid">{% for key, name, mode, group, sw in themes if group==grp %}<label class="theme-opt" data-mode="{{ mode }}"><input type="radio" name="theme" value="{{ key }}" {{ 'checked' if key==theme }}><div class="sw" style="background:{{ sw[0] }}"><i style="background:{{ sw[1] }}"></i><i style="background:{{ sw[2] }}"></i><i style="background:{{ sw[3] }}"></i></div><div class="nm"><span>{{ name }}</span><span class="faint">{{ mode }}</span></div></label>{% endfor %}</div></div>{% endfor %}
 <button class="btn">Save theme</button></form>
 <h2 class="h2">Your account</h2>
 <form method="post" class="card stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">

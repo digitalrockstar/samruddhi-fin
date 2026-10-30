@@ -3,7 +3,7 @@
 {% block content %}
 {% call head('Accounts', 'Everything that holds money, grouped by company') %}{% if can('accounts.manage') %}<a class="btn sm" href="{{ url_for('settings.account_new') }}">{{ icon('plus','s') }} Add</a>{% endif %}{% endcall %}
 {% if not groups %}<div class="card">{% call empty('wallet','No accounts yet','Add your bank accounts, cards and wallets. Set each starting balance to match today.') %}{% if can('accounts.manage') %}<a class="btn" href="{{ url_for('settings.account_new') }}">Add first account</a>{% endif %}{% endcall %}</div>{% endif %}
-{% for inst, items in groups.items() %}<div class="group-title">{{ inst }}</div><div class="card tight"><div class="list">
+<div class="groups">{% for inst, items in groups.items() %}<div class="grp"><div class="group-title">{{ inst }}</div><div class="card tight"><div class="list">
 {% for r in items %}{% set a = r.acc %}{% set tag = 'a' if can('accounts.manage') else 'div' %}
 <{{ tag }} class="li" {% if tag=='a' %}href="{{ url_for('settings.account_edit', aid=a.id) }}"{% endif %} style="align-items:flex-start">
 <span class="ico">{{ icon('card' if a.kind in ('credit_card','debit_card') else ('target' if a.kind=='investment' else 'wallet')) }}</span>
@@ -13,6 +13,6 @@
 {% if a.kind=='loan' %}<span class="s" style="display:block;margin-top:.375rem">{{ r.paid|inr }} paid of {{ a.loan_total|inr }}{% if a.due_day %} · EMI day {{ a.due_day }}{% endif %}</span><span style="display:block;margin-top:.375rem">{{ progress((r.paid*100//a.loan_total) if a.loan_total else 0, 'ok') }}</span>{% endif %}
 {% if a.kind=='investment' and a.current_value is not none %}<span class="s" style="display:block">Current value {{ a.current_value|inr }}</span>{% endif %}
 {% if r.earmarked %}<span class="s" style="display:block">{{ r.earmarked|inr }} earmarked for goals</span>{% endif %}</span>
-<span class="end {{ 'neg' if r.balance is not none and r.balance<0 and a.kind not in ('credit_card','loan') }}">{% if a.kind in ('debit_card','upi') %}<span class="faint">—</span>{% elif a.kind in ('credit_card','loan') %}{{ r.owed|inr if a.kind=='credit_card' else r.outstanding|inr }}<span class="s" style="display:block;font-weight:500">{{ 'owed' if a.kind=='credit_card' else 'outstanding' }}</span>{% else %}{{ r.balance|inr }}{% endif %}</span></{{ tag }}>{% endfor %}</div></div>{% endfor %}
+<span class="end {{ 'neg' if r.balance is not none and r.balance<0 and a.kind not in ('credit_card','loan') }}">{% if a.kind in ('debit_card','upi') %}<span class="faint">—</span>{% elif a.kind in ('credit_card','loan') %}{{ r.owed|inr if a.kind=='credit_card' else r.outstanding|inr }}<span class="s" style="display:block;font-weight:500">{{ 'owed' if a.kind=='credit_card' else 'outstanding' }}</span>{% else %}{{ r.balance|inr }}{% endif %}</span></{{ tag }}>{% endfor %}</div></div></div>{% endfor %}</div>
 <p style="text-align:center;margin-top:1rem"><a href="{{ url_for('settings.accounts', archived=(None if show_archived else 1)) }}">{{ 'Hide archived' if show_archived else 'Show archived' }}</a></p>
 {% endblock %}

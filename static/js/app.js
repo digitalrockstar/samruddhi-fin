@@ -126,7 +126,14 @@
   /* ---------- theme: preview instantly, saved on submit ---------- */
   $$('.theme-opt input').forEach(r => r.addEventListener('change', () => {
     document.documentElement.dataset.theme = r.value;
-    const bg = getComputedStyle(document.body).backgroundColor; $('meta[name=theme-color]')?.setAttribute('content', bg);
+    setTimeout(syncMeta, 50);
+  }));
+
+  const syncMeta = () => $('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(document.body).backgroundColor);
+  syncMeta();
+  $$('input[name=mode]').forEach(r => r.addEventListener('change', () => {
+    $$('.theme-opt').forEach(t => { t.hidden = r.value !== 'all' && t.dataset.mode !== r.value; });
+    $$('[data-grp]').forEach(g => { g.hidden = !$$('.theme-opt:not([hidden])', g).length; });
   }));
 
   /* ---------- progress bars fill after paint ---------- */

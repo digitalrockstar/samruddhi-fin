@@ -2,7 +2,7 @@
 {% block title %}Cashback rule · Samruddhi{% endblock %}
 {% block content %}{% call head(rule.name if rule else 'New cashback rule', back=url_for('settings.cashbacks'), back_label='Cashbacks') %}{% endcall %}
 {% set R = rule %}
-<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<form method="post" class="stack fgrid" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
 {{ field('Rule name', 'name', pick(form,'name', R.name if R else ''), req=True, hint='e.g. ICICI Amazon 5%') }}
 <label class="field"><span>Purchases made with</span><select name="account_id" required>{{ acct_options(accounts, pick(form,'account_id', R.account_id if R else '')) }}</select></label>
 <label class="field"><span>Only for category (optional)</span><select name="category_id"><option value="">Any category</option>{{ cat_options(tree, pick(form,'category_id', R.category_id if R and R.category_id else '')) }}</select></label>
