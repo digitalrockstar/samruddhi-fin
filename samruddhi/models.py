@@ -49,6 +49,7 @@ class User(db.Model):
     is_minor = db.Column(db.Boolean, default=False, nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
     theme = db.Column(db.String(30), default="daylight")
+    glass = db.Column(db.Boolean, default=False, nullable=False, server_default=db.false())
     created_at = db.Column(db.DateTime, default=now)
 
     household = db.relationship("Household")

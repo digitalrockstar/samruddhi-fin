@@ -136,6 +136,18 @@
     $$('[data-grp]').forEach(g => { g.hidden = !$$('.theme-opt:not([hidden])', g).length; });
   }));
 
+  /* ---------- glass theme toggle: applies instantly, saves in the background ---------- */
+  const gt = $('#glass-toggle');
+  gt?.addEventListener('change', async () => {
+    const on = gt.checked, root = document.documentElement;
+    root.dataset.glass = on ? 'on' : 'off'; $('#glass-state').textContent = on ? 'ON' : 'OFF';
+    try {
+      const r = await fetch(gt.form.action, { method: 'POST', headers: { 'X-CSRF': csrf(), Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ glass: on ? 'on' : 'off' }) });
+      if (!r.ok) throw new Error(r.status);
+    } catch (e) { gt.checked = !on; root.dataset.glass = gt.checked ? 'on' : 'off'; $('#glass-state').textContent = gt.checked ? 'ON' : 'OFF'; }
+    setTimeout(syncMeta, 50);
+  });
+
   /* ---------- progress bars fill after paint ---------- */
   requestAnimationFrame(() => requestAnimationFrame(() => $$('.progress > i[data-w]').forEach(i => i.style.width = i.dataset.w + '%')));
 
