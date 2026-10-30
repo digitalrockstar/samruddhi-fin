@@ -12,6 +12,29 @@ from .themes_data import THEME_GROUPS, THEME_KEYS, THEMES  # noqa: E402
 _ran_today = {}
 
 
+def ensure_columns():
+    """Tiny forward-only migration: add columns that exist in the models but not yet in the database
+    (create_all only creates missing tables). Safe on SQLite and Postgres; never drops or alters."""
+    from sqlalchemy import inspect
+    insp = inspect(db.engine)
+    dialect = db.engine.dialect
+    for table in db.metadata.sorted_tables:
+        if not insp.has_table(table.name):
+            continue
+        have = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in have:
+                continue
+            ddl = f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(dialect=dialect)}'
+            sd = col.server_default
+            if sd is not None:
+                arg = sd.arg
+                default = arg.compile(dialect=dialect) if hasattr(arg, "compile") else repr(str(arg))
+                ddl += f" DEFAULT {default}" + ("" if col.nullable else " NOT NULL")
+            with db.engine.begin() as conn:
+                conn.exec_driver_sql(ddl)
+
+
 def create_app(config=None):
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config.from_object(config or Config)
@@ -25,6 +48,7 @@ def create_app(config=None):
 
     with app.app_context():
         db.create_all()
+        ensure_columns()
 
     @app.before_request
     def load_user():
@@ -48,11 +72,12 @@ def create_app(config=None):
     @app.context_processor
     def inject():
         theme = (g.user.theme if g.user else None) or request.cookies.get("theme") or "daylight"
+        glass = g.user.glass if g.user else request.cookies.get("glass") == "1"
         pending = 0
         if g.user:
             from .routes_main import pending_count
             pending = pending_count(g.household.id)
-        return dict(csrf_token=auth.csrf_token, themes=THEMES, theme_groups=THEME_GROUPS, theme=theme if theme in THEME_KEYS else "daylight",
+        return dict(csrf_token=auth.csrf_token, themes=THEMES, theme_groups=THEME_GROUPS, glass=bool(glass), theme=theme if theme in THEME_KEYS else "daylight",
                     pending_count=pending, today=date.today(), can=lambda p: permissions.can(g.user, p))
 
     app.jinja_env.globals["pick"] = lambda form, key, default="": form.get(key, default) if form is not None else default

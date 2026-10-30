@@ -589,6 +589,20 @@ def set_theme():
     return resp
 
 
+@bp.route("/settings/glass", methods=["POST"])
+@login_required
+def set_glass():
+    on = request.form.get("glass") in ("on", "1", "true")
+    g.user.glass = on
+    db.session.commit()
+    if request.headers.get("X-CSRF") and "application/json" in request.headers.get("Accept", ""):
+        resp = make_response({"glass": on})
+    else:
+        resp = make_response(redirect(request.referrer or url_for("settings.profile")))
+    resp.set_cookie("glass", "1" if on else "0", max_age=60 * 60 * 24 * 365, samesite="Lax")
+    return resp
+
+
 # =================================================================== data reset
 @bp.route("/reset")
 @require("data.reset")

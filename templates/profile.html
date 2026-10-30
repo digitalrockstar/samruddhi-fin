@@ -2,6 +2,10 @@
 {% block title %}Settings · Samruddhi{% endblock %}
 {% block content %}{% call head('Settings') %}{% endcall %}
 <h2 class="h2" style="margin-top:0">Appearance</h2>
+<form method="post" action="{{ url_for('settings.set_glass') }}" class="card" id="glass-form"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<label class="switch"><input type="checkbox" role="switch" name="glass" value="on" id="glass-toggle" {{ 'checked' if glass }}><span class="track" aria-hidden="true"><span class="thumb"></span></span>
+<span class="sw-text"><span>Glass theme: <b id="glass-state">{{ 'ON' if glass else 'OFF' }}</b></span><small class="hint">Frosted, translucent surfaces over a soft colour glow. Works with every theme below.</small></span></label>
+<noscript><button class="btn sm sec" style="margin-top:.75rem">Apply</button></noscript></form>
 <form method="post" action="{{ url_for('settings.set_theme') }}" class="card stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
 <div class="seg mode-filter" role="radiogroup" aria-label="Show themes"><label><input type="radio" name="mode" value="all" checked>All {{ themes|length }}</label><label><input type="radio" name="mode" value="light">Light</label><label><input type="radio" name="mode" value="dark">Dark</label></div>
 {% for grp in theme_groups %}<div data-grp><div class="group-title" style="margin:.5rem 0">{{ {'Classic':'Classic','Duo':'Two-colour pairs','Palettes':'Palettes'}[grp] }}</div>

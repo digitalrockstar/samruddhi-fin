@@ -107,3 +107,37 @@ def test_layout_regressions_desktop_width_and_menu_spacing():
     assert "width: 100%" in main and "max-width: 72rem" in main            # content fills the desktop column
     assert re.search(r"\.li \.t, \.li \.s \{ display: block; \}", APP_CSS)  # title and description on separate lines
     assert "@media (min-width: 56rem)" in APP_CSS and ".fgrid" in APP_CSS and ".groups" in APP_CSS
+
+
+# ---------------------------------------------------------------- glass theme
+def test_glass_toggle_persists_and_renders(client):
+    setup_admin(client)
+    assert 'data-glass="off"' in client.get("/settings").get_data(as_text=True)
+    r = client.post("/settings/glass", data=dict(glass="on"), headers={"X-CSRF": "x", "Accept": "application/json"})
+    assert r.get_json() == {"glass": True} and db.session.get(User, 1).glass is True
+    html = client.get("/settings").get_data(as_text=True)
+    assert 'data-glass="on"' in html and "Glass theme: <b id=\"glass-state\">ON</b>" in html and 'role="switch"' in html and "checked" in html
+    client.post("/settings/glass", data=dict())
+    assert db.session.get(User, 1).glass is False and 'data-glass="off"' in client.get("/").get_data(as_text=True)
+
+
+def test_glass_text_stays_readable_on_every_theme():
+    mix = lambda a, b, t: [a[i] + (b[i] - a[i]) * t for i in range(3)]
+    rgb = lambda h: [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+    hx = lambda c: "#%02X%02X%02X" % tuple(round(v) for v in c)
+    assert "74%" in APP_CSS and "20%, transparent" in APP_CSS            # the values this check models
+    for key, t in parse_themes().items():
+        for blob in ("accent", "c2", "c3", "c4", "c5"):                  # strongest glow colour under a card
+            eff = hx(mix(mix(rgb(t["bg"]), rgb(t[blob]), .20), rgb(t["surface"]), .74))
+            for tone, need in (("text", 7), ("text-2", 4.5), ("text-3", 3), ("accent", 4.5)):
+                assert cr(t[tone], eff) >= need, (key, blob, tone)
+
+
+def test_missing_columns_are_added_to_an_existing_database(app):
+    from sqlalchemy import inspect
+    from samruddhi import ensure_columns
+    db.session.execute(db.text("ALTER TABLE users DROP COLUMN glass"))
+    db.session.commit()
+    assert "glass" not in {c["name"] for c in inspect(db.engine).get_columns("users")}
+    ensure_columns()
+    assert "glass" in {c["name"] for c in inspect(db.engine).get_columns("users")}
