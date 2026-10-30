@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, empty %}
+{% block title %}Cashbacks · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Cashbacks', 'Rules create pending cashback you approve later. One-off cashback is added on the transaction itself.') %}{% if can('cashback.manage') %}<a class="btn sm" href="{{ url_for('settings.cashback_form') }}">{{ icon('plus','s') }} Rule</a>{% endif %}{% endcall %}
+{% if not rules %}<div class="card">{% call empty('gift','No rules yet','e.g. 5% on Amazon purchases with your credit card, paid to Amazon Wallet after 30 days.') %}{% endcall %}</div>{% endif %}
+<div class="card tight"><div class="list">{% for r in rules %}
+<a class="li" {% if can('cashback.manage') %}href="{{ url_for('settings.cashback_form', rid=r.id) }}"{% endif %}><span class="ico income">{{ icon('gift') }}</span>
+<span class="grow"><span class="t" style="display:block">{{ r.name }} {% if not r.active %}<span class="badge gray">off</span>{% endif %}{% if r.one_time %} <span class="badge">once</span>{% endif %}</span>
+<span class="s" style="display:block">{{ (r.basis_points/100)|round(2) ~ '%' if r.mode=='percent' else r.fixed_amount|inr }} on {{ r.account.display }}{% if r.category %} · {{ r.category.name }}{% endif %}{% if r.keyword %} · “{{ r.keyword }}”{% endif %} → {{ r.payout_account.display if r.payout_account else 'same account' }}{% if r.delay_days %} after {{ r.delay_days }}d{% else %} same day{% endif %}</span></span>
+<span class="s">{{ r.uses }} used</span></a>{% endfor %}</div></div>
+{% endblock %}

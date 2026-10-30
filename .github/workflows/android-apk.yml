@@ -2,14 +2,13 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      app_url:
+        description: "Deployed web app URL the APK should open"
+        required: false
   push:
     paths:
       - 'android/**'
-      - 'app/**'
-      - 'build.gradle'
-      - 'settings.gradle'
-      - 'gradle.properties'
-      - 'templates/base.html'
       - '.github/workflows/android-apk.yml'
 
 permissions:
@@ -17,24 +16,28 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        env:
+          APP_URL_INPUT: ${{ github.event.inputs.app_url }}
+          APP_URL_VAR: ${{ vars.APP_URL }}
+        run: |
+          URL="${APP_URL_INPUT:-${APP_URL_VAR:-}}"
+          if [ -n "$URL" ]; then gradle --no-daemon assembleDebug -PAPP_URL="$URL"; else gradle --no-daemon assembleDebug; fi
+      - uses: actions/upload-artifact@v4
         with:
-          name: samruddhi-finance-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: samruddhi-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

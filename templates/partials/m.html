@@ -1,0 +1,28 @@
+{% macro icon(name, cls='') %}<svg class="i {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{% endmacro %}
+{% macro progress(pct, state='') %}<div class="progress {{ state }}" role="progressbar" aria-valuenow="{{ [pct or 0, 100]|min }}" aria-valuemin="0" aria-valuemax="100"><i data-w="{{ [pct or 0, 100]|min }}"></i></div>{% endmacro %}
+{% macro head(title, sub='', back=None, back_label='Back') %}
+{% if back %}<a class="back" href="{{ back }}">{{ icon('chev','s') }}{{ back_label }}</a>{% endif %}
+<div class="page-head"><div><h1 class="title">{{ title }}</h1>{% if sub %}<p class="subtitle">{{ sub }}</p>{% endif %}</div><div class="row-flex">{{ caller() if caller else '' }}</div></div>
+{% endmacro %}
+{% macro empty(ic, title, text) %}<div class="empty">{{ icon(ic) }}<b>{{ title }}</b><span>{{ text }}</span>{{ caller() if caller else '' }}</div>{% endmacro %}
+{% macro txn_row(t, ce=True) %}
+{% set typ = t.type %}
+<{{ 'a' if ce else 'div' }} class="li" {% if ce %}href="{{ url_for('main.txn_edit', tid=t.id) }}"{% endif %}>
+  <span class="ico {{ typ }}">{{ icon('arrows' if typ=='transfer' else ('plus' if typ=='income' else 'card')) }}</span>
+  <span class="grow"><span class="t" style="display:block">{{ t.category.path if t.category else ('Transfer' if typ=='transfer' else 'Uncategorised') }}</span>
+    <span class="s" style="display:block">{{ t.account.display }}{% if t.to_account %} → {{ t.to_account.display }}{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</span></span>
+  <span class="end {{ 'pos' if typ=='income' else ('neg' if typ=='expense' else '') }}">{{ '+' if typ=='income' else ('−' if typ=='expense' else '') }}{{ t.amount|inr }}
+    <span class="s" style="display:block;font-weight:500">
+      {% if t.status=='pending' %}<span class="badge warn">Pending</span> {% endif %}
+      {% if t.source=='cashback' %}<span class="badge pos">Cashback</span> {% elif t.source=='subscription' %}<span class="badge">Repeat</span> {% elif t.source=='reminder' %}<span class="badge gray">Bill</span> {% endif %}
+      {% if t.recurrence!='none' and not t.template_id %}<span class="badge">{{ t.recurrence }}</span>{% endif %}</span></span>
+</{{ 'a' if ce else 'div' }}>
+{% endmacro %}
+{% macro field(label, name, value='', type='text', hint='', req=False, attrs='') %}
+<label class="field"><span>{{ label }}</span><input type="{{ type }}" name="{{ name }}" id="{{ name }}" value="{{ value }}" {% if req %}required{% endif %} {{ attrs|safe }}>{% if hint %}<small class="hint">{{ hint }}</small>{% endif %}</label>
+{% endmacro %}
+{% macro acct_options(groups, selected) %}{% for label, items in groups %}<optgroup label="{{ label }}">{% for a in items %}<option value="{{ a.id }}" {{ 'selected' if selected|string == a.id|string }}>{{ a.display }}{% if a.institution and a.institution != a.name %} · {{ a.institution }}{% endif %}{% if a.archived %} (archived){% endif %}</option>{% endfor %}</optgroup>{% endfor %}{% endmacro %}
+{% macro owner_select(people, selected, name='owner_id', shared_label='Shared (everyone)') %}
+<select name="{{ name }}" id="{{ name }}"><option value="">{{ shared_label }}</option>{% for u in people %}<option value="{{ u.id }}" {{ 'selected' if selected|string == u.id|string }}>{{ u.name }}</option>{% endfor %}</select>
+{% endmacro %}
+{% macro cat_options(tree, selected) %}{% for p, kids in tree %}<optgroup label="{{ p.name }}"><option value="{{ p.id }}" {{ 'selected' if selected|string==p.id|string }}>{{ p.name }} (all)</option>{% for k in kids %}<option value="{{ k.id }}" {{ 'selected' if selected|string==k.id|string }}>{{ k.name }}</option>{% endfor %}</optgroup>{% endfor %}{% endmacro %}

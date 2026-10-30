@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, txn_row, empty %}
+{% block title %}Approvals · Samruddhi{% endblock %}
+{% block content %}
+{% call head('Approvals', 'Auto-created items wait here. Nothing counts until approved.') %}{% endcall %}
+{% set admin = can('approvals.manage') %}
+{% if not admin %}<div class="flash">Only an admin can approve or reject. You can see what is waiting.</div>{% endif %}
+{% if not total %}<div class="card">{% call empty('check', 'All clear', 'Subscriptions, cashback, goal assignments and bill reminders will show up here.') %}{% endcall %}</div>{% endif %}
+{% if rems %}<div class="group-title">Bills due</div><div class="stack">{% for r in rems %}
+<div class="card stack"><div class="row-flex spread"><div><b>{{ r.account.display }}</b><div class="muted" style="font-size:.875rem">{{ 'Credit card bill' if r.account.kind=='credit_card' else 'Loan EMI' }} · due {{ r.due_date|d('%d %b') }}</div></div><b class="num">{{ r.amount|inr }}</b></div>
+{% if admin %}<form method="post" action="{{ url_for('main.handle_reminder', rid=r.id, action='approve') }}" class="stack"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+<div class="grid g2"><label class="field"><span>Pay from</span><select name="pay_from" required>{% for a in payers %}<option value="{{ a.id }}" {{ 'selected' if r.account.pay_from_id==a.id }}>{{ a.display }}</option>{% endfor %}</select></label><label class="field"><span>Amount</span><input type="text" inputmode="decimal" name="amount" value="{{ r.amount|amt }}"></label></div>
+<div class="row-flex"><button class="btn" style="flex:1">Approve &amp; record transfer</button><button class="btn sec" formaction="{{ url_for('main.handle_reminder', rid=r.id, action='dismiss') }}">Dismiss</button></div></form>{% endif %}</div>{% endfor %}</div>{% endif %}
+{% if txns %}<div class="group-title">Transactions</div><div class="stack">{% for t in txns %}<div class="card tight"><div class="list">{{ txn_row(t, false) }}</div>
+{% if admin %}<div class="row-flex" style="padding:.5rem 1rem 1rem"><form method="post" action="{{ url_for('main.approve_txn', tid=t.id, action='approve') }}" style="flex:1"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm block">Approve</button></form>
+<form method="post" action="{{ url_for('main.approve_txn', tid=t.id, action='reject') }}" style="flex:1"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm block">Reject</button></form>
+<a class="btn ghost sm" href="{{ url_for('main.txn_edit', tid=t.id, next=url_for('main.approvals')) }}">Edit</a></div>{% endif %}</div>{% endfor %}</div>{% endif %}
+{% if entries %}<div class="group-title">Goal contributions</div><div class="stack">{% for e in entries %}<div class="card"><div class="row-flex spread"><div><b>{{ e.goal.name }}</b><div class="muted" style="font-size:.875rem">From {{ accs[e.account_id].display }} · {{ e.date|d('%d %b') }}</div></div><b class="num">{{ e.amount|inr }}</b></div>
+{% if admin %}<div class="row-flex" style="margin-top:.75rem"><form method="post" action="{{ url_for('main.approve_goal_entry', eid=e.id, action='approve') }}" style="flex:1"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sm block">Approve</button></form>
+<form method="post" action="{{ url_for('main.approve_goal_entry', eid=e.id, action='reject') }}" style="flex:1"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm block">Reject</button></form></div>{% endif %}</div>{% endfor %}</div>{% endif %}
+{% endblock %}

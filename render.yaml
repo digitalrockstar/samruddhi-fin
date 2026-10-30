@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: samruddhi-fin
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.9
+      - key: SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false   # paste the Neon connection string in the Render dashboard

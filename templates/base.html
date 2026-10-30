@@ -1,0 +1,70 @@
+{% from 'partials/m.html' import icon %}
+<!doctype html>
+<html lang="en" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="csrf" content="{{ csrf_token() }}">
+<meta name="theme-color" content="#F2F2F7">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<title>{% block title %}Samruddhi{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+{% include 'partials/icons.html' %}
+{% macro flashes() %}{% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}<div class="flashes" role="status">{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}</div>{% endif %}{% endwith %}{% endmacro %}
+{% if g.user %}
+{% set ep = request.endpoint or '' %}
+<div class="scroll-edge"></div>
+<div class="shell">
+  <aside class="sidebar glass" aria-label="Main">
+    <div class="brand"><span class="logo">स</span>Samruddhi</div>
+    <a class="btn block" href="{{ url_for('main.txn_new') }}">{{ icon('plus') }} Add transaction</a>
+    <div style="height:.5rem"></div>
+    <a class="nav {{ 'on' if ep=='main.dashboard' }}" href="{{ url_for('main.dashboard') }}">{{ icon('home') }} Dashboard</a>
+    <a class="nav {{ 'on' if ep in ('main.activity','main.txn_edit') }}" href="{{ url_for('main.activity') }}">{{ icon('list') }} Activity</a>
+    <a class="nav {{ 'on' if ep=='main.approvals' }}" href="{{ url_for('main.approvals') }}">{{ icon('check') }} Approvals{% if pending_count %}<span class="nb">{{ pending_count }}</span>{% endif %}</a>
+    <a class="nav {{ 'on' if ep=='main.subscriptions' }}" href="{{ url_for('main.subscriptions') }}">{{ icon('repeat') }} Subscriptions</a>
+    <div class="sep"></div>
+    <a class="nav {{ 'on' if ep.startswith('settings.account') }}" href="{{ url_for('settings.accounts') }}">{{ icon('wallet') }} Accounts</a>
+    <a class="nav {{ 'on' if ep.startswith('settings.budget') }}" href="{{ url_for('settings.budgets') }}">{{ icon('pie') }} Budgets</a>
+    <a class="nav {{ 'on' if ep.startswith('settings.goal') }}" href="{{ url_for('settings.goals') }}">{{ icon('target') }} Goals</a>
+    <a class="nav {{ 'on' if ep.startswith('settings.cashback') }}" href="{{ url_for('settings.cashbacks') }}">{{ icon('gift') }} Cashbacks</a>
+    <div class="sep"></div>
+    <a class="nav {{ 'on' if ep.startswith('settings.categor') }}" href="{{ url_for('settings.categories') }}">{{ icon('tag') }} Categories</a>
+    <a class="nav {{ 'on' if ep.startswith('settings.p') and ep not in ('settings.profile',) }}" href="{{ url_for('settings.people') }}">{{ icon('users') }} People</a>
+    <a class="nav {{ 'on' if ep=='settings.profile' }}" href="{{ url_for('settings.profile') }}">{{ icon('gear') }} Settings &amp; themes</a>
+    {% if can('data.reset') %}<a class="nav {{ 'on' if ep.startswith('settings.reset') }}" href="{{ url_for('settings.reset') }}">{{ icon('shield') }} Data reset</a>{% endif %}
+    <div style="flex:1"></div>
+    <div class="muted" style="font-size:.8125rem;padding:0 .75rem">{{ g.household.name }}<br>{{ g.user.name }}{% if g.user.is_admin %} · admin{% endif %}</div>
+    <form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn ghost block" style="justify-content:flex-start">{{ icon('logout') }} Sign out</button></form>
+  </aside>
+  <main class="main" id="main">{{ flashes() }}{% block content %}{% endblock %}</main>
+</div>
+<nav class="tabbar glass" aria-label="Main">
+  <a class="tab {{ 'on' if ep=='main.dashboard' }}" href="{{ url_for('main.dashboard') }}">{{ icon('home') }}Home</a>
+  <a class="tab {{ 'on' if ep in ('main.activity','main.txn_edit') }}" href="{{ url_for('main.activity') }}">{{ icon('list') }}Activity</a>
+  <button class="fab" data-sheet="quick-add" aria-label="Add transaction">{{ icon('plus') }}</button>
+  <a class="tab {{ 'on' if ep=='main.approvals' }}" href="{{ url_for('main.approvals') }}">{{ icon('check') }}Approvals{% if pending_count %}<span class="badge-dot">{{ pending_count }}</span>{% endif %}</a>
+  <a class="tab {{ 'on' if ep=='main.more' }}" href="{{ url_for('main.more') }}">{{ icon('menu') }}More</a>
+</nav>
+<div id="scrim" class="scrim"></div>
+<section class="sheet glass" id="quick-add" aria-label="Add transaction" role="dialog" aria-modal="true">
+  <div class="grab"></div><div class="sheet-head"><h2>Add</h2><button class="btn ghost sm" data-close>Close</button></div>
+  <div class="sheet-body"><div class="card tight flat"><div class="list">
+    <a class="li" href="{{ url_for('main.txn_new', type='expense') }}"><span class="ico expense">{{ icon('card') }}</span><span class="grow"><span class="t">Expense</span><span class="s">Money you spent</span></span>{{ icon('chev','s') }}</a>
+    <a class="li" href="{{ url_for('main.txn_new', type='income') }}"><span class="ico income">{{ icon('plus') }}</span><span class="grow"><span class="t">Income</span><span class="s">Salary, refunds, earnings</span></span>{{ icon('chev','s') }}</a>
+    <a class="li" href="{{ url_for('main.txn_new', type='transfer') }}"><span class="ico transfer">{{ icon('arrows') }}</span><span class="grow"><span class="t">Transfer</span><span class="s">Between your accounts, card or loan payments</span></span>{{ icon('chev','s') }}</a>
+  </div></div></div>
+</section>
+<dialog class="confirm" id="confirm"><form method="dialog" class="stack"><h2 style="font-size:1.1875rem" id="confirm-msg">Are you sure?</h2><div class="row-flex" style="justify-content:flex-end"><button class="btn sec" value="cancel">Cancel</button><button class="btn danger" id="confirm-ok" value="ok">Confirm</button></div></form></dialog>
+{% else %}
+<main class="auth">{{ flashes() }}{% block auth %}{% endblock %}</main>
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

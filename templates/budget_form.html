@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field, cat_options, owner_select %}
+{% block title %}Budget · Samruddhi{% endblock %}
+{% block content %}{% call head('Edit budget' if b else 'New budget', back=url_for('settings.budgets'), back_label='Budgets') %}{% endcall %}
+<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{% if can('budget.family') %}<label class="field"><span>For</span>{{ owner_select(people, pick(form,'owner_id', b.owner_id if b and b.owner_id else ''), shared_label='Family (shared)') }}</label>{% else %}<p class="muted">This will be your personal budget.</p>{% endif %}
+<label class="field"><span>Category</span><select name="category_id" required><option value="">Choose…</option>{{ cat_options(tree, pick(form,'category_id', b.category_id if b else '')) }}</select><small class="hint">Pick “(all)” to include every sub-category.</small></label>
+<div class="seg">{% for k, l in periods.items() %}<label><input type="radio" name="period" value="{{ k }}" {{ 'checked' if pick(form,'period', b.period if b else 'monthly')==k }}>{{ l }}</label>{% endfor %}</div>
+{{ field('Limit (₹)', 'amount', pick(form,'amount', (b.amount|amt) if b else ''), req=True, attrs='inputmode=decimal') }}
+<button class="btn block">Save budget</button></form>
+{% if b %}<form method="post" action="{{ url_for('settings.budget_archive', bid=b.id) }}" style="max-width:36rem;margin-top:.75rem" data-confirm="Remove this budget?" data-confirm-label="Remove"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec block neg">{{ icon('trash','s') }} Remove budget</button></form>{% endif %}
+{% endblock %}

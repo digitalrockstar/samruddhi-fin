@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field, acct_options, cat_options %}
+{% block title %}Cashback rule · Samruddhi{% endblock %}
+{% block content %}{% call head(rule.name if rule else 'New cashback rule', back=url_for('settings.cashbacks'), back_label='Cashbacks') %}{% endcall %}
+{% set R = rule %}
+<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{{ field('Rule name', 'name', pick(form,'name', R.name if R else ''), req=True, hint='e.g. ICICI Amazon 5%') }}
+<label class="field"><span>Purchases made with</span><select name="account_id" required>{{ acct_options(accounts, pick(form,'account_id', R.account_id if R else '')) }}</select></label>
+<label class="field"><span>Only for category (optional)</span><select name="category_id"><option value="">Any category</option>{{ cat_options(tree, pick(form,'category_id', R.category_id if R and R.category_id else '')) }}</select></label>
+{{ field('Only if note contains (optional)', 'keyword', pick(form,'keyword', R.keyword if R else ''), hint='e.g. amazon, zepto') }}
+<div class="seg"><label><input type="radio" name="mode" value="percent" {{ 'checked' if pick(form,'mode', R.mode if R else 'percent')=='percent' }}>Percent</label><label><input type="radio" name="mode" value="fixed" {{ 'checked' if pick(form,'mode', R.mode if R else 'percent')=='fixed' }}>Fixed amount</label></div>
+<div class="grid g2">{{ field('Percent', 'percent', pick(form,'percent', ((R.basis_points/100)|string) if R and R.mode=='percent' else ''), attrs='inputmode=decimal', hint='e.g. 5') }}{{ field('Fixed ₹', 'fixed_amount', pick(form,'fixed_amount', (R.fixed_amount|amt) if R and R.fixed_amount else ''), attrs='inputmode=decimal') }}</div>
+<div class="grid g2">{{ field('Minimum spend ₹', 'min_spend', pick(form,'min_spend', (R.min_spend|amt) if R and R.min_spend else ''), attrs='inputmode=decimal', hint='e.g. 800') }}{{ field('Cap per purchase ₹', 'max_cashback', pick(form,'max_cashback', (R.max_cashback|amt) if R and R.max_cashback else ''), attrs='inputmode=decimal') }}</div>
+{{ field('Arrives after (days)', 'delay_days', pick(form,'delay_days', R.delay_days if R else '0'), 'number', attrs='min=0') }}
+<label class="field"><span>Paid into</span><select name="payout_account_id"><option value="">Same account</option>{{ acct_options(accounts, pick(form,'payout_account_id', R.payout_account_id if R and R.payout_account_id else '')) }}</select></label>
+<label class="check"><input type="checkbox" name="one_time" value="1" {{ 'checked' if picked(form,'one_time','1', R.one_time if R else False) }}> One time only</label>
+<label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if (picked(form,'active','1', R.active if R else True)) }}> Active</label>
+<button class="btn block">Save rule</button></form>
+{% if R %}<form method="post" action="{{ url_for('settings.cashback_toggle', rid=R.id) }}" style="max-width:36rem;margin-top:.75rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec block">{{ 'Turn off' if R.active else 'Turn on' }}</button></form>{% endif %}
+{% endblock %}

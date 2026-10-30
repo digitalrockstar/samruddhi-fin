@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head %}
+{% block title %}People · Samruddhi{% endblock %}
+{% block content %}
+{% call head('People', 'Family members. Minors are tags for budgets and splits - they do not sign in.') %}{% if can('people.manage') %}<a class="btn sm" href="{{ url_for('settings.person_form') }}">{{ icon('plus','s') }} Add</a>{% endif %}{% endcall %}
+<div class="card tight"><div class="list">{% for u in members %}{% set tag = 'a' if can('people.manage') else 'div' %}
+<{{ tag }} class="li" {% if tag=='a' %}href="{{ url_for('settings.person_form', uid=u.id) }}"{% endif %}><span class="ico">{{ icon('users') }}</span>
+<span class="grow"><span class="t" style="display:block">{{ u.name }} {% if u.is_admin %}<span class="badge">Admin</span>{% endif %}{% if u.is_minor %} <span class="badge gray">Minor</span>{% endif %}{% if not u.active %} <span class="badge warn">Inactive</span>{% endif %}</span>
+<span class="s" style="display:block">{{ ('@' ~ u.username ~ ' · ' ~ u.email) if u.username else 'Tag only, no login' }}</span></span>
+{% if can('people.manage') and u.id != g.user.id %}<form method="post" action="{{ url_for('settings.person_active', uid=u.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn sec sm">{{ 'Deactivate' if u.active else 'Reactivate' }}</button></form>{% endif %}</{{ tag }}>{% endfor %}</div></div>
+{% endblock %}

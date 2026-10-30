@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field, owner_select %}
+{% block title %}Goal · Samruddhi{% endblock %}
+{% block content %}{% call head('Edit goal' if goal else 'New goal', back=url_for('settings.goals'), back_label='Goals') %}{% endcall %}
+<form method="post" class="stack" style="max-width:36rem"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+{{ field('Name', 'name', pick(form,'name', goal.name if goal else ''), req=True, hint='Car, Bike, Gold, Holiday…') }}
+{{ field('Target (₹, optional)', 'target', pick(form,'target', (goal.target|amt) if goal and goal.target else ''), attrs='inputmode=decimal') }}
+{{ field('Deadline (optional)', 'deadline', pick(form,'deadline', goal.deadline.isoformat() if goal and goal.deadline else ''), 'date') }}
+{% if can('goal.shared') %}<label class="field"><span>Whose goal</span>{{ owner_select(people, pick(form,'owner_id', goal.owner_id if goal and goal.owner_id else ''), shared_label='Shared (family)') }}</label>{% else %}<p class="muted">This will be your personal goal.</p>{% endif %}
+<button class="btn block">Save goal</button></form>{% endblock %}
