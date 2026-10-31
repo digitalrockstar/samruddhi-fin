@@ -7,6 +7,7 @@ Principles
 - Debit cards and UPI have no balance - they move the bank account they are linked to.
 """
 import calendar
+import re
 import csv
 import io
 import uuid
@@ -18,8 +19,8 @@ from sqlalchemy.orm import aliased
 
 from .models import (
     ACCOUNT_KINDS, GOAL_KINDS, LINKED_KINDS, RECURRENCES, SPENDING_KINDS, TXN_TYPES,
-    Account, Budget, CashbackRule, Category, Goal, GoalEntry, GoalRule, Household, Reminder,
-    Transaction, TxnBeneficiary, User, db,
+    Account, AccountHolder, Budget, CashbackRule, Category, Goal, GoalEntry, GoalRule, Household, Reminder,
+    Transaction, TxnBeneficiary, UpiApp, User, db,
 )
 
 REMINDER_WINDOW_DAYS = 7
@@ -76,6 +77,111 @@ def rupees_str(paise) -> str:
 # ----------------------------------------------------------------- account helpers
 def accounts_map(hid):
     return {a.id: a for a in Account.query.filter_by(household_id=hid).all()}
+
+
+# ----------------------------------------------------------------- holders + UPI
+UPI_AUTO_SUBTYPES = ("Savings", "Joint", "Minor")
+
+
+def set_holders(acc, primary_id, secondary_ids):
+    """Primary holder + secondary holders. owner_id mirrors the primary. A minor's account needs an adult secondary."""
+    primary_id = primary_id or None
+    secs = []
+    for i in secondary_ids or []:
+        if i and i != primary_id and i not in secs:
+            secs.append(i)
+    if secs and not primary_id:
+        raise LedgerError("Choose a primary holder before adding secondary holders.")
+    users = {u.id: u for u in User.query.filter(User.household_id == acc.household_id,
+                                                 User.id.in_([primary_id, *secs] if primary_id else secs)).all()} if (primary_id or secs) else {}
+    if any(i not in users for i in ([primary_id] if primary_id else []) + secs):
+        raise LedgerError("Unknown account holder.")
+    if acc.kind == "bank":
+        if acc.subtype == "Minor" and not (primary_id and secs):
+            raise LedgerError("A minor account needs a primary holder and a secondary holder.")
+        if primary_id and users[primary_id].is_minor and not any(not users[i].is_minor for i in secs):
+            raise LedgerError("A minor's account needs an adult as secondary holder.")
+    acc.owner_id = primary_id
+    acc.holders.clear()
+    db.session.flush()
+    if primary_id:
+        acc.holders.append(AccountHolder(user_id=primary_id, role="primary"))
+    for i in secs:
+        acc.holders.append(AccountHolder(user_id=i, role="secondary"))
+    db.session.flush()
+    db.session.expire(acc, ["holders"])
+
+
+def acc_matches(person, acc):
+    """Dashboard person filter. Accounts with no holders are family/shared. Minors never count as a
+    secondary/joint holder in the bifurcation - they only match on an account they hold as primary."""
+    if person in (None, "all"):
+        return True
+    if person == "family":
+        return not acc.holder_ids
+    pid = int(person)
+    if acc.primary_holder and acc.primary_holder.id == pid:
+        return True
+    return any(u.id == pid and not u.is_minor for u in acc.secondary_holders)
+
+
+def _slug(x):
+    return re.sub(r"[^a-z0-9]", "", (x or "").lower())
+
+
+def default_upi_id(acc):
+    who = acc.primary_holder.name.split()[0] if acc.primary_holder else acc.name
+    base, host = _slug(who) or "upi", _slug(acc.institution or acc.name)[:12] or "bank"
+    taken = {a.upi_id for a in Account.query.filter(Account.household_id == acc.household_id, Account.upi_id.isnot(None))}
+    cand = f"{base}@{host}"
+    if cand in taken:
+        cand = f"{base}{acc.last4}@{host}" if acc.last4 and f"{base}{acc.last4}@{host}" not in taken else f"{base}{len(taken) + 1}@{host}"
+    return cand
+
+
+def ensure_upi(acc):
+    """Every savings / joint / minor bank account gets a UPI ID of its own (editable). Never duplicated."""
+    if acc.kind != "bank" or acc.subtype not in UPI_AUTO_SUBTYPES or not acc.id:
+        return None
+    if Account.query.filter_by(household_id=acc.household_id, kind="upi", linked_id=acc.id).first():
+        return None
+    u = Account(household_id=acc.household_id, name=f"{acc.name} UPI", kind="upi", institution=acc.institution,
+                last4=acc.last4, linked_id=acc.id, purpose="UPI", starting_balance=0)
+    db.session.add(u)
+    db.session.flush()
+    sync_upi_holders(acc, [u])
+    u.upi_id = default_upi_id(u)
+    return u
+
+
+def sync_upi_holders(bank, upis=None):
+    """UPI IDs follow the holders of their bank account."""
+    if upis is None:
+        upis = Account.query.filter_by(household_id=bank.household_id, kind="upi", linked_id=bank.id).all()
+    for u in upis:
+        u.owner_id = bank.owner_id
+        u.holders.clear()
+        db.session.flush()
+        if bank.primary_holder:
+            u.holders.append(AccountHolder(user_id=bank.primary_holder.id, role="primary"))
+        for sec in bank.secondary_holders:
+            u.holders.append(AccountHolder(user_id=sec.id, role="secondary"))
+        db.session.flush()
+        db.session.expire(u, ["holders"])
+
+
+def backfill_accounts():
+    """Idempotent, runs at start-up: holder rows for old owner_id accounts, missing UPI IDs, starter apps."""
+    from .seed import seed_upi_apps
+    for a in Account.query.all():
+        if a.owner_id and not a.holders:
+            a.holders.append(AccountHolder(user_id=a.owner_id, role="primary"))
+    db.session.flush()
+    for a in Account.query.filter_by(kind="bank").all():
+        ensure_upi(a)
+    for (hid,) in db.session.query(Household.id).all():
+        seed_upi_apps(hid)
+    db.session.commit()
 
 
 def effective(acc, accs):
@@ -226,9 +332,14 @@ def _check_fields(hid, d, skip_category_window=False):
     if ttype == "expense" and scope == "individuals":
         if not ben_ids:
             raise LedgerError("Pick at least one person, or mark the expense as Family.")
-        found = User.query.filter(User.household_id == hid, User.id.in_(ben_ids)).count()
-        if found != len(ben_ids):
+        found = User.query.filter(User.household_id == hid, User.id.in_(ben_ids)).all()
+        if len(found) != len(ben_ids):
             raise LedgerError("Unknown beneficiary.")
+        if not any(k for k in (d.get("beneficiary_shares") or {})):      # equal split: minors are left out
+            adults = sorted(u.id for u in found if not u.is_minor)
+            if not adults:
+                raise LedgerError("Minors are not part of an equal split. Pick an adult, or choose amounts.")
+            ben_ids = adults
         if custom:
             if set(custom) != set(ben_ids) or any(v <= 0 for v in custom.values()):
                 raise LedgerError("Enter an amount for every selected person.")
@@ -255,6 +366,17 @@ def _goal_target_account(d, accs):
     return effective(acc, accs)
 
 
+def _upi_app_for(hid, account_id, app_id):
+    """The payment app only applies when the paying account is a UPI account."""
+    acc = db.session.get(Account, account_id) if account_id else None
+    if not app_id or not acc or acc.kind != "upi":
+        return None
+    app = db.session.get(UpiApp, app_id)
+    if not app or app.household_id != hid:
+        raise LedgerError("Unknown payment app.")
+    return app.id
+
+
 def create_transaction(hid, user_id, d, validate=True, commit=True) -> Transaction:
     """d keys: type,date,amount,account_id,to_account_id,category_id,note,scope,beneficiary_ids,
     goal_id,recurrence,cashback{mode,value,days,account_id},status,source,template_id,group_id,..."""
@@ -275,7 +397,8 @@ def create_transaction(hid, user_id, d, validate=True, commit=True) -> Transacti
         category_id=cat.id if cat else None, note=(d.get("note") or "").strip()[:500],
         status=status, source=d.get("source", "manual"), scope=scope, created_by=user_id,
         recurrence=rec, template_id=d.get("template_id"), rule_id=d.get("rule_id"),
-        source_txn_id=d.get("source_txn_id"), group_id=d.get("group_id"))
+        source_txn_id=d.get("source_txn_id"), group_id=d.get("group_id"),
+        upi_app_id=_upi_app_for(hid, d.get("account_id"), d.get("upi_app_id")))
     if rec != "none":
         t.next_run = next_occurrence(t.date, rec, t.date.day)
     for uid in ben_ids:
@@ -307,6 +430,7 @@ def update_transaction(t: Transaction, d) -> Transaction:
     t.category_id = cat.id if cat else None
     t.note = (d.get("note") or "").strip()[:500]
     t.scope = scope
+    t.upi_app_id = _upi_app_for(hid, d["account_id"], d.get("upi_app_id"))
     t.beneficiaries.clear()
     db.session.flush()
     for uid in ben_ids:
@@ -799,7 +923,7 @@ def dashboard(hid, start, end, person="all", kind="all", today=None):
             if kind not in (None, "all") and acc.kind != kind:
                 continue
             if t.type == "income":
-                if person_matches(person, acc.owner_id):
+                if acc_matches(person, acc):
                     out.append((t, acc, acc.owner_id, t.amount))
             else:
                 for uid, amt in shares(t):
@@ -839,7 +963,7 @@ def dashboard(hid, start, end, person="all", kind="all", today=None):
     def acc_ok(a):
         if kind not in (None, "all") and a.kind != kind:
             return False
-        return person_matches(person, a.owner_id)
+        return acc_matches(person, a)
 
     liquid = invested = invested_value = loans = 0
     cards = card_count = addon_count = 0
@@ -899,7 +1023,7 @@ def account_groups(hid, include_archived=False, today=None):
     bal = balances(hid, today, accs=accs)
     marks = earmarked(hid)
     groups = defaultdict(list)
-    for a in sorted(accs.values(), key=lambda x: (x.institution.lower(), x.name.lower())):
+    for a in sorted(accs.values(), key=lambda x: (x.group_name.lower(), x.name.lower())):
         if a.archived and not include_archived:
             continue
         item = dict(acc=a, balance=bal.get(a.id), earmarked=marks.get(a.id, 0))
@@ -911,7 +1035,7 @@ def account_groups(hid, include_archived=False, today=None):
             item.update(outstanding=-bal.get(a.id, 0), paid=max((a.loan_total or 0) + bal.get(a.id, 0), 0))
         if a.kind in LINKED_KINDS and a.linked:
             item["linked_name"] = a.linked.display
-        groups[a.institution or "Other"].append(item)
+        groups[a.group_name].append(item)
     return dict(groups)
 
 
@@ -923,6 +1047,8 @@ def _household_rows(hid):
         ("households", Household.query.filter_by(id=hid)),
         ("users", User.query.filter_by(household_id=hid)),
         ("accounts", Account.query.filter_by(household_id=hid)),
+        ("account_holders", AccountHolder.query.filter(AccountHolder.account_id.in_(db.session.query(Account.id).filter_by(household_id=hid)))),
+        ("upi_apps", UpiApp.query.filter_by(household_id=hid)),
         ("categories", Category.query.filter_by(household_id=hid)),
         ("transactions", Transaction.query.filter_by(household_id=hid)),
         ("txn_beneficiaries", TxnBeneficiary.query.filter(TxnBeneficiary.txn_id.in_(tx_ids))),

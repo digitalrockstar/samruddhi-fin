@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field, owner_select %}
+{% extends 'base.html' %}{% from 'partials/m.html' import icon, head, field, holders_fields %}
 {% block title %}{{ 'Edit' if acc else 'New' }} account · Samruddhi{% endblock %}
 {% block content %}
 {% call head(acc.name if acc else 'New account', back=url_for('settings.accounts'), back_label='Accounts') %}{% endcall %}
@@ -9,9 +9,10 @@
 {% if kind not in ('debit_card','upi') %}{{ field('Bank / company', 'institution', pick(form,'institution', A.institution if A else ''), hint='Accounts are grouped by this') }}{% endif %}
 {% if kind=='bank' %}<label class="field"><span>Account type</span><select name="subtype">{% for s in subtypes %}<option {{ 'selected' if pick(form,'subtype', A.subtype if A else 'Savings')==s }}>{{ s }}</option>{% endfor %}</select></label>{% endif %}
 {% if kind in ('bank','credit_card','debit_card','investment','loan') %}{{ field('Last 4 digits', 'last4', pick(form,'last4', A.last4 if A else ''), attrs='maxlength=4 inputmode=numeric') }}{% endif %}
-<label class="field"><span>Owner</span>{{ owner_select(people, pick(form,'owner_id', A.owner_id if A and A.owner_id else '')) }}</label>
+{{ holders_fields(people, A, form) }}
 {{ field('Preferred for (optional)', 'purpose', pick(form,'purpose', A.purpose if A else ''), hint='e.g. fuel, cab, savings, investment') }}
 {% if kind in ('debit_card','upi') %}<label class="field"><span>Linked bank account</span><select name="linked_id" required><option value="">Choose…</option>{% for b in banks %}<option value="{{ b.id }}" {{ 'selected' if pick(form,'linked_id', A.linked_id if A and A.linked_id else '')|string==b.id|string }}>{{ b.display }}</option>{% endfor %}</select><small class="hint">Spending on this moves money in that bank account.</small></label>{% endif %}
+{% if kind=='upi' %}{{ field('UPI ID', 'upi_id', pick(form,'upi_id', A.upi_id if A and A.upi_id else ''), hint='Leave blank to generate one. Edit to match the real handle, e.g. name@okhdfcbank') }}{% endif %}
 {% if kind=='credit_card' %}
 <label class="field"><span>Add-on of (optional)</span><select name="parent_id"><option value="">Main card</option>{% for p in parents %}<option value="{{ p.id }}" {{ 'selected' if pick(form,'parent_id', A.parent_id if A and A.parent_id else '')|string==p.id|string }}>{{ p.display }}</option>{% endfor %}</select><small class="hint">Add-on cards share the main card’s limit.</small></label>
 {{ field('Credit limit (₹)', 'credit_limit', pick(form,'credit_limit', (A.credit_limit|amt) if A and A.credit_limit else ''), attrs='inputmode=decimal', hint='Leave blank for add-on cards') }}

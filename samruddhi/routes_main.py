@@ -8,7 +8,7 @@ from .permissions import can, require
 from .auth import login_required
 from .ledger import LedgerError, parse_money
 from .models import (ACCOUNT_KINDS, RECURRENCES, Account, Budget, Category, Goal, GoalEntry, Reminder, Transaction,
-                     User, db)
+                     UpiApp, User, db)
 
 bp = Blueprint("main", __name__)
 PAGE_SIZE = 50
@@ -195,7 +195,9 @@ def txn_form_context(hid, t=None, ttype="expense", form=None):
     return dict(
         t=t, ttype=(t.type if t else ttype), form=form, accounts=account_choices(hid, keep), hints=account_hints(hid),
         cats=category_payload(hid), people=users_of(hid), goals=goals, recurrences=RECURRENCES,
-        entry=GoalEntry.query.filter_by(txn_id=t.id).first() if t else None)
+        entry=GoalEntry.query.filter_by(txn_id=t.id).first() if t else None,
+        upi_apps=[a for a in UpiApp.query.filter_by(household_id=hid).order_by(UpiApp.name).all()
+                  if not a.archived or (t and t.upi_app_id == a.id)])
 
 
 def txn_data_from_form(ttype, f):
@@ -204,7 +206,7 @@ def txn_data_from_form(ttype, f):
              category_id=to_int(f.get("category_id")), note=f.get("note", ""), scope=f.get("scope", "family"),
              beneficiary_ids=[int(x) for x in f.getlist("beneficiaries") if x.isdigit()],
              goal_id=to_int(f.get("goal_id")) if ttype != "expense" else None,
-             recurrence=f.get("recurrence", "none"))
+             recurrence=f.get("recurrence", "none"), upi_app_id=to_int(f.get("upi_app_id")))
     if ttype == "expense" and d["scope"] == "individuals" and f.get("split") == "custom":
         d["beneficiary_shares"] = {uid: parse_money(f.get(f"share_{uid}", ""), allow_zero=True)
                                    for uid in d["beneficiary_ids"]}

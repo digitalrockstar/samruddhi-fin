@@ -92,10 +92,13 @@ class Account(db.Model):
     loan_total = db.Column(db.BigInteger, default=0)              # original loan amount
     emi_principal = db.Column(db.BigInteger, default=0)
     emi_interest = db.Column(db.BigInteger, default=0)
+    upi_id = db.Column(db.String(80), nullable=True)               # UPI accounts: the handle, e.g. name@bank
     archived = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=now)
 
-    owner = db.relationship("User", foreign_keys=[owner_id])
+    owner = db.relationship("User", foreign_keys=[owner_id])      # primary holder (kept in sync with holders)
+    holders = db.relationship("AccountHolder", cascade="all, delete-orphan", backref="account",
+                              order_by="AccountHolder.id")
     parent = db.relationship("Account", foreign_keys=[parent_id], remote_side=[id])
     linked = db.relationship("Account", foreign_keys=[linked_id], remote_side=[id])
     pay_from = db.relationship("Account", foreign_keys=[pay_from_id], remote_side=[id])
@@ -109,9 +112,51 @@ class Account(db.Model):
         return self.kind not in LINKED_KINDS
 
     @property
+    def primary_holder(self):
+        for h in self.holders:
+            if h.role == "primary":
+                return h.user
+        return self.owner
+
+    @property
+    def secondary_holders(self):
+        return [h.user for h in self.holders if h.role == "secondary"]
+
+    @property
+    def holder_ids(self):
+        p = self.primary_holder
+        return ([p.id] if p else []) + [u.id for u in self.secondary_holders]
+
+    @property
+    def group_name(self):
+        """Debit cards / UPI sit under the bank they draw from."""
+        if self.kind in LINKED_KINDS and self.linked and self.linked.institution:
+            return self.linked.institution
+        return self.institution or "Other"
+
+    @property
     def display(self):
         tail = f" ••{self.last4}" if self.last4 else ""
         return f"{self.name}{tail}"
+
+
+class AccountHolder(db.Model):
+    """Who holds an account. One primary; any number of secondary (joint holders, a minor's guardian)."""
+    __tablename__ = "account_holders"
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("accounts.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    role = db.Column(db.String(10), default="primary", nullable=False)     # primary | secondary
+    user = db.relationship("User")
+
+
+class UpiApp(db.Model):
+    """Editable master list of UPI payment apps (Paytm, GPay, PhonePe, Cred...). Archived, never deleted."""
+    __tablename__ = "upi_apps"
+    id = db.Column(db.Integer, primary_key=True)
+    household_id = db.Column(db.Integer, db.ForeignKey("households.id"), nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False)
+    archived = db.Column(db.Boolean, default=False, nullable=False)
 
 
 class Category(db.Model):
@@ -169,7 +214,9 @@ class Transaction(db.Model):
     rule_id = db.Column(db.Integer, db.ForeignKey("cashback_rules.id"), nullable=True)
     source_txn_id = db.Column(db.Integer, db.ForeignKey("transactions.id"), nullable=True, index=True)
     group_id = db.Column(db.String(40), nullable=True, index=True)
+    upi_app_id = db.Column(db.Integer, db.ForeignKey("upi_apps.id"), nullable=True)   # payment app, UPI accounts only
 
+    upi_app = db.relationship("UpiApp")
     account = db.relationship("Account", foreign_keys=[account_id])
     to_account = db.relationship("Account", foreign_keys=[to_account_id])
     category = db.relationship("Category")

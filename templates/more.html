@@ -4,7 +4,7 @@
 {% macro item(ep, ic, t, s) %}<a class="li" href="{{ url_for(ep) }}"><span class="ico">{{ icon(ic) }}</span><span class="grow"><span class="t">{{ t }}</span><span class="s">{{ s }}</span></span>{{ icon('chev','s') }}</a>{% endmacro %}
 <div class="group-title">Money</div><div class="card tight"><div class="list">
 {{ item('settings.accounts','wallet','Accounts','Banks, cards, wallets, loans, investments') }}{{ item('main.subscriptions','repeat','Subscriptions','Repeating transactions') }}
-{{ item('settings.budgets','pie','Budgets','Weekly, monthly, annual limits') }}{{ item('settings.goals','target','Goals','Savings earmarks') }}{{ item('settings.cashbacks','gift','Cashbacks','Rules and promotions') }}</div></div>
+{{ item('settings.budgets','pie','Budgets','Weekly, monthly, annual limits') }}{{ item('settings.goals','target','Goals','Savings earmarks') }}{{ item('settings.cashbacks','gift','Cashbacks','Rules and promotions') }}{% if can('accounts.manage') %}{{ item('settings.upi_apps','card','UPI apps','Paytm, GPay, PhonePe, Cred and more') }}{% endif %}</div></div>
 <div class="group-title">Household</div><div class="card tight"><div class="list">
 {{ item('settings.categories','tag','Categories','Two-level tags for every transaction') }}{{ item('settings.people','users','People','Members and roles') }}
 {{ item('settings.profile','gear','Settings & themes','Your login, household name, appearance') }}
