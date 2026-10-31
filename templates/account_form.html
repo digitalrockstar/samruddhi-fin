@@ -8,6 +8,7 @@
 {{ field('Name', 'name', pick(form,'name', A.name if A else ''), req=True, hint='e.g. Axis Credit Card, Amazon Wallet, ICICI Meal Card') }}
 {% if kind not in ('debit_card','upi') %}{{ field('Bank / company', 'institution', pick(form,'institution', A.institution if A else ''), hint='Accounts are grouped by this') }}{% endif %}
 {% if kind=='bank' %}<label class="field"><span>Account type</span><select name="subtype">{% for s in subtypes %}<option {{ 'selected' if pick(form,'subtype', A.subtype if A else 'Savings')==s }}>{{ s }}</option>{% endfor %}</select></label>{% endif %}
+{% if kind=='bank' %}{{ field('UPI ID', 'upi_id', pick(form,'upi_id', upi_id), hint='Created automatically for Savings, Joint and Minor accounts. Edit to match the real handle.') }}{% endif %}
 {% if kind in ('bank','credit_card','debit_card','investment','loan') %}{{ field('Last 4 digits', 'last4', pick(form,'last4', A.last4 if A else ''), attrs='maxlength=4 inputmode=numeric') }}{% endif %}
 {{ holders_fields(people, A, form) }}
 {{ field('Preferred for (optional)', 'purpose', pick(form,'purpose', A.purpose if A else ''), hint='e.g. fuel, cab, savings, investment') }}

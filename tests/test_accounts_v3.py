@@ -96,6 +96,9 @@ def test_pages_and_forms_via_web(client):
     client.post(f"/accounts/{upi.id}", data=dict(kind="upi", name=upi.name, linked_id=str(bank.id), upi_id="asha@okhdfc"))
     assert db.session.get(Account, upi.id).upi_id == "asha@okhdfc"
     assert client.post(f"/accounts/{upi.id}", data=dict(kind="upi", name=upi.name, linked_id=str(bank.id), upi_id="bad")).status_code in (200, 302)
+    client.post(f"/accounts/{bank.id}", data=dict(kind="bank", name="Kotak Savings", subtype="Savings", owner_id=str(User_id("asha")), starting="500", upi_id="asha@kotak2"))
+    assert db.session.get(Account, upi.id).upi_id == "asha@kotak2"
+    assert "asha@kotak2" in client.get(f"/accounts/{bank.id}").get_data(as_text=True)
     for url in ("/upi-apps", "/transactions/new", "/more"):
         assert client.get(url).status_code == 200
     client.post("/upi-apps", data=dict(name="BHIM"))

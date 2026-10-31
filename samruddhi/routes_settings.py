@@ -107,10 +107,7 @@ def account_from_form(f, kind, acc=None):
         vals["linked_id"] = link.id
         vals["institution"] = link.institution or link.name      # sits under its bank in the list
         if kind == "upi":
-            handle = (f.get("upi_id") or "").strip().lower()
-            if handle and not re.fullmatch(r"[a-z0-9._\-]{2,}@[a-z0-9.\-]{2,}", handle):
-                raise LedgerError("UPI ID should look like name@bank.")
-            vals["upi_id"] = handle or None
+            vals["upi_id"] = clean_upi(f.get("upi_id"))
     elif kind == "investment":
         vals["current_value"] = money_or_none(f.get("current_value"))
     elif kind == "loan":
@@ -147,14 +144,32 @@ def account_new():
             if kind == "upi" and not acc.upi_id:
                 acc.upi_id = ledger.default_upi_id(acc)
             ledger.ensure_upi(acc)
+            set_bank_upi(acc, request.form)
             db.session.commit()
             flash("Account added.", "ok")
             return redirect(url_for("settings.accounts"))
         except LedgerError as e:
             db.session.rollback()
             flash(str(e), "error")
-    return render_template("account_form.html", acc=None, kind=kind, kinds=ACCOUNT_KINDS, **account_form_ctx(),
+    return render_template("account_form.html", acc=None, kind=kind, kinds=ACCOUNT_KINDS, upi_id="", **account_form_ctx(),
                            form=request.form if request.method == "POST" else None)
+
+
+def clean_upi(raw):
+    handle = (raw or "").strip().lower()
+    if handle and not re.fullmatch(r"[a-z0-9._\-]{2,}@[a-z0-9.\-]{2,}", handle):
+        raise LedgerError("UPI ID should look like name@bank.")
+    return handle or None
+
+
+def set_bank_upi(acc, f):
+    """The bank form's UPI ID field edits the UPI account linked to this bank."""
+    if acc.kind != "bank" or "upi_id" not in f:
+        return
+    handle = clean_upi(f.get("upi_id"))
+    upi = Account.query.filter_by(household_id=acc.household_id, kind="upi", linked_id=acc.id, archived=False).first()
+    if upi and handle:
+        upi.upi_id = handle
 
 
 def apply_holders(acc, f):
@@ -186,6 +201,7 @@ def account_edit(aid):
             if acc.kind == "upi" and not acc.upi_id:
                 acc.upi_id = ledger.default_upi_id(acc)
             ledger.ensure_upi(acc)
+            set_bank_upi(acc, request.form)
             db.session.commit()
             flash("Saved.", "ok")
             return redirect(url_for("settings.accounts"))
@@ -193,6 +209,7 @@ def account_edit(aid):
             db.session.rollback()
             flash(str(e), "error")
     return render_template("account_form.html", acc=acc, kind=acc.kind, kinds=ACCOUNT_KINDS, **account_form_ctx(acc.id),
+                           upi_id=next((u.upi_id for u in Account.query.filter_by(kind="upi", linked_id=acc.id, archived=False) if u.upi_id), ""),
                            form=request.form if request.method == "POST" else None)
 
 
