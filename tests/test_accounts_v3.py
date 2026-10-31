@@ -91,7 +91,7 @@ def test_pages_and_forms_via_web(client):
     dc = Account.query.filter_by(kind="debit_card").one()
     assert dc.institution == "Kotak Mahindra Bank"
     html = client.get("/accounts").get_data(as_text=True)
-    assert "OTHER" not in html.upper().split("GROUP-TITLE")[1:][0][:40] and "UPI" in html
+    assert "OTHER" not in html.upper().split("GROUP-TITLE")[1:][0][:40] and "Kotak Savings UPI" not in html
     upi = Account.query.filter_by(kind="upi").one()
     client.post(f"/accounts/{upi.id}", data=dict(kind="upi", name=upi.name, linked_id=str(bank.id), upi_id="asha@okhdfc"))
     assert db.session.get(Account, upi.id).upi_id == "asha@okhdfc"

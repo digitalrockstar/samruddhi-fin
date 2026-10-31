@@ -126,6 +126,8 @@ def account_from_form(f, kind, acc=None):
 def accounts():
     show_archived = bool(request.args.get("archived"))
     groups = ledger.account_groups(g.household.id, include_archived=show_archived)
+    # UPI IDs stay selectable in transactions but are not listed here
+    groups = {k: v for k, v in ((k, [r for r in v if r["acc"].kind != "upi"]) for k, v in groups.items()) if v}
     return render_template("accounts.html", groups=groups, show_archived=show_archived, kinds=ACCOUNT_KINDS)
 
 
