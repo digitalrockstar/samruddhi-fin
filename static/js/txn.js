@@ -44,6 +44,9 @@
   $$('input[name=scope]', form).forEach(r => r.addEventListener('change', togglePanels));
   l1.addEventListener('change', () => { sel2 = null; buildL2(); });
   dateIn.addEventListener('change', () => { sel2 = +l2.value || null; buildL1(); });
+  const acct = $('#account'), upiWrap = $('#upi-wrap');
+  const showUpi = () => { const o = acct.selectedOptions[0]; upiWrap.classList.toggle('hide', !(o && o.dataset.kind === 'upi')); };
+  acct.addEventListener('change', showUpi); showUpi();
   hint('account', 'hint-from'); hint('to_account', 'hint-to'); hint('cb_account', 'hint-cb');
   const amt = $('#amount');
   amt.addEventListener('blur', () => { const v = parseFloat(amt.value.replace(/,/g, '')); if (!isNaN(v) && v > 0) amt.value = v.toFixed(2); });

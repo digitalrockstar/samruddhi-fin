@@ -5,7 +5,7 @@ from functools import wraps
 from flask import (Blueprint, abort, current_app, flash, g, redirect, render_template, request, session, url_for)
 
 from .models import Household, User, db
-from .seed import seed_categories
+from .seed import seed_categories, seed_upi_apps
 
 bp = Blueprint("auth", __name__)
 
@@ -93,6 +93,7 @@ def setup():
             u.set_password(f["password"])
             db.session.add(u)
             seed_categories(hh.id)
+            seed_upi_apps(hh.id)
             db.session.commit()
             session.clear()
             session["uid"] = u.id

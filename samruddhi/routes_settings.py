@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 from datetime import date
 
@@ -10,7 +11,7 @@ from .permissions import can, require
 from .auth import login_required, validate_new_credentials
 from .ledger import LedgerError, parse_money
 from .models import (ACCOUNT_KINDS, BANK_SUBTYPES, GOAL_KINDS, PERIODS, RECURRENCES, SPENDING_KINDS, Account, Budget,
-                     CashbackRule, Category, Goal, GoalEntry, GoalRule, User, db)
+                     CashbackRule, Category, Goal, GoalEntry, GoalRule, UpiApp, User, db)
 from .routes_main import account_choices, money_or_none, parse_date, to_int, users_of
 
 bp = Blueprint("settings", __name__)
@@ -30,6 +31,44 @@ def category_tree(hid, kind=None):
             for c in q.order_by(Category.name).all()]
 
 
+# =================================================================== UPI payment apps
+@bp.route("/upi-apps", methods=["GET", "POST"])
+@require("accounts.manage")
+def upi_apps():
+    hid = g.household.id
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()[:60]
+        if not name:
+            flash("Give the app a name.", "error")
+        elif UpiApp.query.filter(UpiApp.household_id == hid, db.func.lower(UpiApp.name) == name.lower()).first():
+            flash(f"{name} is already in the list.", "error")
+        else:
+            db.session.add(UpiApp(household_id=hid, name=name))
+            db.session.commit()
+            flash("Payment app added.", "ok")
+        return redirect(url_for("settings.upi_apps"))
+    apps = UpiApp.query.filter_by(household_id=hid).order_by(UpiApp.archived, UpiApp.name).all()
+    return render_template("upi_apps.html", apps=apps)
+
+
+@bp.route("/upi-apps/<int:aid>", methods=["POST"])
+@require("accounts.manage")
+def upi_app_edit(aid):
+    app = _own(db.get_or_404(UpiApp, aid))
+    if request.form.get("archive"):
+        app.archived = not app.archived
+        flash(f"{app.name} {'archived - past payments keep it' if app.archived else 'restored'}.", "ok")
+    else:
+        name = (request.form.get("name") or "").strip()[:60]
+        if not name:
+            flash("Give the app a name.", "error")
+        else:
+            app.name = name
+            flash("Saved.", "ok")
+    db.session.commit()
+    return redirect(url_for("settings.upi_apps"))
+
+
 # =================================================================== accounts
 def account_from_form(f, kind, acc=None):
     name = (f.get("name") or "").strip()
@@ -42,9 +81,7 @@ def account_from_form(f, kind, acc=None):
     if due is not None and not 1 <= due <= 31:
         raise LedgerError("Due day must be between 1 and 31.")
     vals = dict(name=name, institution=(f.get("institution") or "").strip(), subtype=(f.get("subtype") or "").strip(),
-                last4=last4, purpose=(f.get("purpose") or "").strip()[:60], owner_id=to_int(f.get("owner_id")))
-    if vals["owner_id"] and not User.query.filter_by(id=vals["owner_id"], household_id=g.household.id).first():
-        raise LedgerError("Unknown owner.")
+                last4=last4, purpose=(f.get("purpose") or "").strip()[:60])
     if not vals["institution"] and kind not in ("debit_card", "upi"):
         vals["institution"] = name
     start = money_or_none(f.get("starting")) or 0
@@ -68,6 +105,12 @@ def account_from_form(f, kind, acc=None):
         if not link or link.household_id != g.household.id or link.kind != "bank":
             raise LedgerError("Link this to the bank account it draws from.")
         vals["linked_id"] = link.id
+        vals["institution"] = link.institution or link.name      # sits under its bank in the list
+        if kind == "upi":
+            handle = (f.get("upi_id") or "").strip().lower()
+            if handle and not re.fullmatch(r"[a-z0-9._\-]{2,}@[a-z0-9.\-]{2,}", handle):
+                raise LedgerError("UPI ID should look like name@bank.")
+            vals["upi_id"] = handle or None
     elif kind == "investment":
         vals["current_value"] = money_or_none(f.get("current_value"))
     elif kind == "loan":
@@ -95,7 +138,13 @@ def account_new():
     if request.method == "POST":
         try:
             vals = account_from_form(request.form, kind)
-            db.session.add(Account(household_id=g.household.id, kind=kind, **vals))
+            acc = Account(household_id=g.household.id, kind=kind, **vals)
+            db.session.add(acc)
+            db.session.flush()
+            apply_holders(acc, request.form)
+            if kind == "upi" and not acc.upi_id:
+                acc.upi_id = ledger.default_upi_id(acc)
+            ledger.ensure_upi(acc)
             db.session.commit()
             flash("Account added.", "ok")
             return redirect(url_for("settings.accounts"))
@@ -104,6 +153,14 @@ def account_new():
             flash(str(e), "error")
     return render_template("account_form.html", acc=None, kind=kind, kinds=ACCOUNT_KINDS, **account_form_ctx(),
                            form=request.form if request.method == "POST" else None)
+
+
+def apply_holders(acc, f):
+    primary = to_int(f.get("owner_id"))
+    secs = [int(x) for x in f.getlist("secondary_ids") if x.isdigit()]
+    ledger.set_holders(acc, primary, secs)
+    if acc.kind == "bank":
+        ledger.sync_upi_holders(acc)
 
 
 def account_form_ctx(exclude_id=None):
@@ -123,6 +180,10 @@ def account_edit(aid):
             vals = account_from_form(request.form, acc.kind, acc)
             for k, v in vals.items():
                 setattr(acc, k, v)
+            apply_holders(acc, request.form)
+            if acc.kind == "upi" and not acc.upi_id:
+                acc.upi_id = ledger.default_upi_id(acc)
+            ledger.ensure_upi(acc)
             db.session.commit()
             flash("Saved.", "ok")
             return redirect(url_for("settings.accounts"))

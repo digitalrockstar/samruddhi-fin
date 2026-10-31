@@ -49,6 +49,7 @@ def create_app(config=None):
     with app.app_context():
         db.create_all()
         ensure_columns()
+        ledger.backfill_accounts()
 
     @app.before_request
     def load_user():

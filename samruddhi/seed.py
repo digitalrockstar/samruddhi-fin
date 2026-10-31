@@ -1,5 +1,5 @@
 """Starter categories for a new household. Admin can add/archive more later."""
-from .models import Category, db
+from .models import Category, UpiApp, db
 
 DEFAULTS = {
     "expense": {
@@ -38,4 +38,16 @@ def seed_categories(household_id):
             for k in kids:
                 db.session.add(Category(household_id=household_id, name=k, kind=kind, parent_id=l1.id,
                                         system_key=SYSTEM_KEYS.get((kind, k))))
+    db.session.flush()
+
+
+UPI_APPS = ["Paytm", "GPay", "PhonePe", "Cred"]
+
+
+def seed_upi_apps(household_id):
+    """Starter payment apps. Only when the household has never had any (archived ones count)."""
+    if UpiApp.query.filter_by(household_id=household_id).count():
+        return
+    for n in UPI_APPS:
+        db.session.add(UpiApp(household_id=household_id, name=n))
     db.session.flush()
