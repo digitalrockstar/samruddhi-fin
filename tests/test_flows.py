@@ -218,10 +218,10 @@ def test_dashboard_numbers(hh):
     assert d["cards"] == 2 and d["addon_cards"] == 1
     assert d["card_owed"] == P(1500) and d["card_limit"] == P(10000) and d["utilisation"] == 15.0
     assert d["pending"] == 1
-    assert {p["name"]: p["total"] for p in d["by_person"]} == {"Family": P(1300), "Ravi": P(500)}
+    assert {p["name"]: p["total"] for p in d["by_person"]} == {"Asha": P(650), "Ravi": P(1150)}   # family spend is shared equally by adults
     assert d["by_category"][0]["name"] == "Grocery"
     only_ravi = ledger.dashboard(hh.id, s, date.today(), person=str(hh.ravi.id))
-    assert only_ravi["expense"] == P(500)
+    assert only_ravi["expense"] == P(1150)
     cards_only = ledger.dashboard(hh.id, s, date.today(), kind="credit_card")
     assert cards_only["expense"] == P(1500)
     assert d["net_worth"] == d["total_balance"] + d["invested_value"] - d["card_owed"] - d["loans"]

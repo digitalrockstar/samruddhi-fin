@@ -335,11 +335,6 @@ def _check_fields(hid, d, skip_category_window=False):
         found = User.query.filter(User.household_id == hid, User.id.in_(ben_ids)).all()
         if len(found) != len(ben_ids):
             raise LedgerError("Unknown beneficiary.")
-        if not any(k for k in (d.get("beneficiary_shares") or {})):      # equal split: minors are left out
-            adults = sorted(u.id for u in found if not u.is_minor)
-            if not adults:
-                raise LedgerError("Minors are not part of an equal split. Pick an adult, or choose amounts.")
-            ben_ids = adults
         if custom:
             if set(custom) != set(ben_ids) or any(v <= 0 for v in custom.values()):
                 raise LedgerError("Enter an amount for every selected person.")
@@ -809,6 +804,14 @@ def shares(t):
     return [(uid, base + (rem if i == 0 else 0)) for i, uid in enumerate(ids)]
 
 
+def family_shares(t, adults):
+    """Family-scope expense: equal share for every adult (minors only via Individual). [(user_id, paise)]"""
+    if not adults:
+        return [(None, t.amount)]
+    base, rem = divmod(t.amount, len(adults))
+    return [(uid, base + (rem if i == 0 else 0)) for i, uid in enumerate(adults)]
+
+
 def budget_status(b: Budget, today=None):
     today = today or date.today()
     start, end = period_range(b.period, today)
@@ -912,6 +915,7 @@ def dashboard(hid, start, end, person="all", kind="all", today=None):
     accs = accounts_map(hid)
     cats = {c.id: c for c in Category.query.filter_by(household_id=hid).all()}
     users = {u.id: u for u in User.query.filter_by(household_id=hid).all()}
+    adults = sorted(u.id for u in users.values() if u.active and not u.is_minor)
 
     def flows(s, e):
         out = []
@@ -925,8 +929,14 @@ def dashboard(hid, start, end, person="all", kind="all", today=None):
             if t.type == "income":
                 if acc_matches(person, acc):
                     out.append((t, acc, acc.owner_id, t.amount))
-            else:
+            elif t.scope == "individuals":
                 for uid, amt in shares(t):
+                    if person_matches(person, uid):
+                        out.append((t, acc, uid, amt))
+            elif person == "family":
+                out.append((t, acc, None, t.amount))
+            else:
+                for uid, amt in family_shares(t, adults):
                     if person_matches(person, uid):
                         out.append((t, acc, uid, amt))
         return out

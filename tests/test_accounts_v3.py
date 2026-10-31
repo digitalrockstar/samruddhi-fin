@@ -58,17 +58,18 @@ def test_payment_app_only_kept_for_upi_accounts(hh):
     assert t1.upi_app_id == app.id and t2.upi_app_id is None
 
 
-def test_equal_split_leaves_minors_out(hh):
+def test_minor_can_be_chosen_and_family_splits_among_adults(hh):
     b = _bank(hh)
-    t = tx(hh, "expense", 90, b, cat(hh, "Zepto"), scope="individuals",
-           beneficiary_ids=[hh.admin.id, hh.ravi.id, hh.kid.id])
-    assert t.beneficiary_ids == sorted([hh.admin.id, hh.ravi.id])
-    assert dict(ledger.shares(t)) == {hh.admin.id: P(45), hh.ravi.id: P(45)}
-    with pytest.raises(ledger.LedgerError):
-        tx(hh, "expense", 90, b, cat(hh, "Zepto"), scope="individuals", beneficiary_ids=[hh.kid.id])
-    k = tx(hh, "expense", 90, b, cat(hh, "Zepto"), scope="individuals", beneficiary_ids=[hh.kid.id, hh.ravi.id],
-           beneficiary_shares={hh.kid.id: P(30), hh.ravi.id: P(60)})   # explicit amounts may include a minor
-    assert dict(ledger.shares(k))[hh.kid.id] == P(30)
+    k = tx(hh, "expense", 90, b, cat(hh, "Zepto"), scope="individuals", beneficiary_ids=[hh.kid.id])
+    assert dict(ledger.shares(k)) == {hh.kid.id: P(90)}
+    m = tx(hh, "expense", 90, b, cat(hh, "Zepto"), scope="individuals", beneficiary_ids=[hh.admin.id, hh.kid.id])
+    assert dict(ledger.shares(m)) == {hh.admin.id: P(45), hh.kid.id: P(45)}
+    f = tx(hh, "expense", 90, b, cat(hh, "Zepto"))
+    assert ledger.family_shares(f, [hh.admin.id, hh.ravi.id]) == [(hh.admin.id, P(45)), (hh.ravi.id, P(45))]
+    d = ledger.dashboard(hh.id, f.date.replace(day=1), f.date)
+    names = {r["name"]: r["total"] for r in d["by_person"]}
+    assert names["Kiddo"] == P(135) and names["Asha"] == P(45) + P(45) and names["Ravi"] == P(45)
+    assert sum(names.values()) == d["expense"]
 
 
 def test_joint_account_income_never_attributed_to_minor_secondary(hh):
